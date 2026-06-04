@@ -5,6 +5,13 @@ import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
 
+/** Moshi decodes JSON numbers as Double and strings as String; coerce both. */
+private fun coerceNullableDouble(value: Any?): Double? = when (value) {
+    is Number -> value.toDouble()
+    is String -> value.toDoubleOrNull()
+    else -> null
+}
+
 fun MetaPreviewDto.toDomain(): MetaPreview {
     return MetaPreview(
         id = id,
@@ -18,6 +25,7 @@ fun MetaPreviewDto.toDomain(): MetaPreview {
         description = description,
         releaseInfo = releaseInfo,
         imdbRating = imdbRating?.toFloatOrNull(),
+        popularity = coerceNullableDouble(popularity),
         genres = genres ?: emptyList(),
         runtime = runtime,
         status = status?.trim()?.takeIf { it.isNotBlank() },

@@ -33,7 +33,20 @@ data class SearchUiState(
     val posterCardHeightDp: Int = 189,
     val posterCardCornerRadiusDp: Int = 12,
     val recentSearches: List<String> = emptyList(),
-    val suggestions: List<String> = emptyList()
+    val suggestions: List<SearchSuggestion> = emptyList()
+)
+
+/** A search suggestion; carries the addon base URL so it can open the detail page. */
+@Immutable
+data class SearchSuggestion(
+    val id: String,
+    val type: String,
+    val name: String,
+    val poster: String?,
+    val year: String?,
+    val addonBaseUrl: String,
+    val popularity: Double? = null,
+    val rating: Float? = null
 )
 
 @Immutable

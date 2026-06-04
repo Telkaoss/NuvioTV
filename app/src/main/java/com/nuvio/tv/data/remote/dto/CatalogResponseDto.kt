@@ -20,6 +20,8 @@ data class MetaPreviewDto(
     @Json(name = "description") val description: String? = null,
     @Json(name = "releaseInfo") val releaseInfo: String? = null,
     @Json(name = "imdbRating") val imdbRating: String? = null,
+    // Tolerant type (number or string depending on addon); coerced in the mapper.
+    @Json(name = "popularity") val popularity: Any? = null,
     @Json(name = "genres") val genres: List<String>? = null,
     @Json(name = "runtime") val runtime: String? = null,
     @Json(name = "status") val status: String? = null,

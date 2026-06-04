@@ -40,6 +40,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.tv.material3.Border
+import androidx.tv.material3.Card
+import androidx.tv.material3.CardDefaults
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Explore
@@ -125,6 +136,8 @@ fun SearchScreen(
     var isSearchFieldFocused by remember { mutableStateOf(false) }
     var isRecentSearchSectionFocused by remember { mutableStateOf(false) }
     var focusResults by remember { mutableStateOf(false) }
+    var focusSuggestions by remember { mutableStateOf(false) }
+    val suggestionsFocusRequester = remember { FocusRequester() }
     var pendingFocusMoveToResultsQuery by remember { mutableStateOf<String?>(null) }
     var pendingFocusMoveSawSearching by remember { mutableStateOf(false) }
     var pendingFocusMoveHadExistingSearchRows by remember { mutableStateOf(false) }
@@ -281,6 +294,16 @@ fun SearchScreen(
     val trimmedQuery = remember(uiState.query) { uiState.query.trim() }
     val trimmedSubmittedQuery = remember(uiState.submittedQuery) { uiState.submittedQuery.trim() }
 
+    // Show the dropdown while typing (query not yet submitted) and we have matches.
+    val showSuggestions = remember(uiState.suggestions, trimmedQuery, trimmedSubmittedQuery) {
+        uiState.suggestions.isNotEmpty() &&
+            trimmedQuery.length >= 2 &&
+            trimmedQuery != trimmedSubmittedQuery
+    }
+
+    // The TV keyboard is a separate window that swallows the d-pad, so the list
+    // is reached by dismissing it (BACK) then pressing DOWN on the field.
+
     // Stable per-row state maps — mirrors ClassicHomeContent pattern so
     // CatalogRowSection keeps focus when placeholder→real data transitions.
     val searchRowStates = remember { mutableMapOf<String, LazyListState>() }
@@ -350,7 +373,7 @@ fun SearchScreen(
         val trimmedNextQuery = nextQuery.trim()
         val selectedSuggestion = trimmedNextQuery.length >= 2 &&
             trimmedNextQuery != trimmedSubmittedQuery &&
-            uiState.suggestions.any { it.equals(trimmedNextQuery, ignoreCase = true) } &&
+            uiState.suggestions.any { it.name.equals(trimmedNextQuery, ignoreCase = true) } &&
             trimmedNextQuery.startsWith(previousQuery, ignoreCase = true) &&
             trimmedNextQuery.length - previousQuery.length > 1
 
@@ -368,6 +391,17 @@ fun SearchScreen(
         if (trimmedRecentQuery.isNotEmpty()) {
             viewModel.onEvent(SearchEvent.QueryChanged(trimmedRecentQuery))
             submitCurrentQuery(trimmedRecentQuery)
+        }
+    }
+
+    // Move focus from the search field down into the first suggestion row.
+    LaunchedEffect(focusSuggestions, showSuggestions) {
+        if (focusSuggestions && showSuggestions) {
+            delay(60)
+            runCatching { suggestionsFocusRequester.requestFocus() }
+            focusSuggestions = false
+        } else if (!showSuggestions) {
+            focusSuggestions = false
         }
     }
 
@@ -427,9 +461,13 @@ fun SearchScreen(
     LaunchedEffect(uiState.suggestions) {
         val imm = context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? InputMethodManager
             ?: return@LaunchedEffect
-        val completions = uiState.suggestions.mapIndexed { index, name ->
-            CompletionInfo(index.toLong(), index, name)
-        }.toTypedArray()
+        // Collapse same-title entries: the keyboard bar is text-only and picking
+        // one just runs the search (the dropdown keeps remakes apart via the year).
+        val completions = uiState.suggestions
+            .distinctBy { it.name }
+            .mapIndexed { index, suggestion ->
+                CompletionInfo(index.toLong(), index, suggestion.name)
+            }.toTypedArray()
         imm.displayCompletions(view, completions)
     }
 
@@ -481,7 +519,7 @@ fun SearchScreen(
             ) {
                 SearchInputField(
                     query = uiState.query,
-                    canMoveToResults = canMoveToResults,
+                    canMoveToResults = canMoveToResults || showSuggestions,
                     voiceFocusRequester = if (isVoiceSearchAvailable) voiceFocusRequester else null,
                     searchFocusRequester = searchFocusRequester,
                     onSearchFieldFocusChanged = { focused -> isSearchFieldFocused = focused },
@@ -493,7 +531,9 @@ fun SearchScreen(
                     isVoiceListening = isVoiceListening,
                     voiceRmsLevel = voiceRmsLevel,
                     onVoiceSearch = launchVoiceSearch,
-                    onMoveToResults = { focusResults = true },
+                    onMoveToResults = {
+                        if (showSuggestions) focusSuggestions = true else focusResults = true
+                    },
                     onOpenDiscover = onOpenDiscover,
                     showDiscoverButton = uiState.discoverLocation == DiscoverLocation.IN_SEARCH,
                     keyboardController = keyboardController
@@ -501,7 +541,22 @@ fun SearchScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                if (showRecentSearches) {
+                if (showSuggestions) {
+                    SearchSuggestionsList(
+                        suggestions = uiState.suggestions,
+                        firstItemFocusRequester = suggestionsFocusRequester,
+                        onSuggestionClick = { suggestion ->
+                            viewModel.hasSavedSearchFocus = false
+                            viewModel.recordRecentSearch(suggestion.name)
+                            onNavigateToDetail(suggestion.id, suggestion.type, suggestion.addonBaseUrl)
+                        },
+                        onMoveUpFromFirst = { runCatching { searchFocusRequester.requestFocus() } },
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 52.dp)
+                            .verticalScroll(rememberScrollState())
+                    )
+                } else if (showRecentSearches) {
                     RecentSearchesSection(
                         recentSearches = uiState.recentSearches,
                         onSearchSelected = submitRecentSearch,
@@ -540,7 +595,7 @@ fun SearchScreen(
                 item {
                     SearchInputField(
                         query = uiState.query,
-                        canMoveToResults = canMoveToResults,
+                        canMoveToResults = canMoveToResults || showSuggestions,
                         voiceFocusRequester = if (isVoiceSearchAvailable) voiceFocusRequester else null,
                         searchFocusRequester = searchFocusRequester,
                         onSearchFieldFocusChanged = { focused -> isSearchFieldFocused = focused },
@@ -553,7 +608,7 @@ fun SearchScreen(
                         voiceRmsLevel = voiceRmsLevel,
                         onVoiceSearch = launchVoiceSearch,
                         onMoveToResults = {
-                            focusResults = true
+                            if (showSuggestions) focusSuggestions = true else focusResults = true
                         },
                         onOpenDiscover = onOpenDiscover,
                         showDiscoverButton = uiState.discoverLocation == DiscoverLocation.IN_SEARCH,
@@ -561,7 +616,23 @@ fun SearchScreen(
                     )
                 }
 
-                if ((trimmedSubmittedQuery.length < 2 || hasPendingUnsubmittedQuery) && !showRecentSearches) {
+                if (showSuggestions) {
+                    item {
+                        SearchSuggestionsList(
+                            suggestions = uiState.suggestions,
+                            firstItemFocusRequester = suggestionsFocusRequester,
+                            onSuggestionClick = { suggestion ->
+                                viewModel.hasSavedSearchFocus = false
+                                viewModel.recordRecentSearch(suggestion.name)
+                                onNavigateToDetail(suggestion.id, suggestion.type, suggestion.addonBaseUrl)
+                            },
+                            onMoveUpFromFirst = { runCatching { searchFocusRequester.requestFocus() } },
+                            modifier = Modifier.padding(horizontal = 52.dp)
+                        )
+                    }
+                }
+
+                if ((trimmedSubmittedQuery.length < 2 || hasPendingUnsubmittedQuery) && !showRecentSearches && !showSuggestions) {
                     item {
                         Text(
                             text = stringResource(R.string.search_keyboard_hint),
@@ -628,7 +699,7 @@ fun SearchScreen(
                         }
                     }
 
-                    !uiState.isSearching && (visibleCatalogRows.isEmpty()) -> {
+                    !uiState.isSearching && visibleCatalogRows.isEmpty() && !showSuggestions -> {
                         item {
                             EmptyScreenState(
                                 title = stringResource(R.string.search_no_results_title),
@@ -799,6 +870,145 @@ private fun RecentSearchesSection(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun SearchSuggestionsList(
+    suggestions: List<SearchSuggestion>,
+    firstItemFocusRequester: FocusRequester,
+    onSuggestionClick: (SearchSuggestion) -> Unit,
+    onMoveUpFromFirst: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .focusGroup()
+            .padding(vertical = 6.dp), // so the first/last focus border isn't clipped
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        suggestions.forEachIndexed { index, suggestion ->
+            SearchSuggestionCard(
+                suggestion = suggestion,
+                onClick = { onSuggestionClick(suggestion) },
+                modifier = if (index == 0) {
+                    // UP on the first row returns to the search field.
+                    Modifier
+                        .focusRequester(firstItemFocusRequester)
+                        .onPreviewKeyEvent { keyEvent ->
+                            if (keyEvent.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                                    onMoveUpFromFirst()
+                                }
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                } else {
+                    Modifier
+                }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun SearchSuggestionCard(
+    suggestion: SearchSuggestion,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val posterModel = remember(suggestion.poster) {
+        suggestion.poster?.let { url ->
+            ImageRequest.Builder(context)
+                .data(url)
+                .crossfade(true)
+                .build()
+        }
+    }
+    Card(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.colors(
+            containerColor = NuvioColors.BackgroundCard,
+            focusedContainerColor = NuvioColors.FocusBackground
+        ),
+        border = CardDefaults.border(
+            focusedBorder = Border(
+                border = BorderStroke(2.dp, NuvioColors.FocusRing),
+                shape = RoundedCornerShape(10.dp)
+            )
+        ),
+        shape = CardDefaults.shape(RoundedCornerShape(10.dp)),
+        scale = CardDefaults.scale(focusedScale = 1.02f)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(width = 40.dp, height = 60.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(NuvioColors.Border)
+            ) {
+                if (posterModel != null) {
+                    AsyncImage(
+                        model = posterModel,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = suggestion.name,
+                    style = androidx.tv.material3.MaterialTheme.typography.titleSmall,
+                    color = NuvioColors.TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(3.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val typeLabel = when (suggestion.type.lowercase()) {
+                        "movie" -> stringResource(R.string.type_movie)
+                        "series", "tv" -> stringResource(R.string.type_series)
+                        else -> suggestion.type.replaceFirstChar { it.uppercaseChar() }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(NuvioColors.Secondary.copy(alpha = 0.18f))
+                            .padding(horizontal = 6.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = typeLabel,
+                            style = androidx.tv.material3.MaterialTheme.typography.labelSmall,
+                            color = NuvioColors.Secondary,
+                            maxLines = 1
+                        )
+                    }
+                    if (!suggestion.year.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = suggestion.year,
+                            style = androidx.tv.material3.MaterialTheme.typography.bodySmall,
+                            color = NuvioColors.TextTertiary,
+                            maxLines = 1
+                        )
+                    }
+                }
             }
         }
     }

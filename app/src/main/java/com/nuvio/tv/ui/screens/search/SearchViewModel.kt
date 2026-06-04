@@ -78,7 +78,7 @@ class SearchViewModel @Inject constructor(
         const val DISCOVER_INITIAL_LIMIT = 100
         const val DISCOVER_SHOW_MORE_BATCH = 50
         const val SUGGESTION_DEBOUNCE_MS = 150L
-        const val MAX_SUGGESTIONS = 8
+        const val MAX_SUGGESTIONS = 12
         const val MAX_RECENT_SEARCHES = 8
     }
 
@@ -236,8 +236,11 @@ class SearchViewModel @Inject constructor(
                 return@launch
             }
 
-            val collectedNames = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
-            val queryLower = query.lowercase()
+            // Int = arrival index, used as the final tie-breaker (addons return
+            // results already ranked by popularity).
+            val collected = java.util.concurrent.ConcurrentHashMap<String, Pair<Int, SearchSuggestion>>()
+            val arrivalOrder = java.util.concurrent.atomic.AtomicInteger(0)
+            val normQuery = normalizeForSearch(query)
             val suggestionJobs = searchTargets.map { (addon, catalog) ->
                 launch {
                     try {
@@ -256,15 +259,38 @@ class SearchViewModel @Inject constructor(
                             if (result is NetworkResult.Success && _uiState.value.query.trim() == query) {
                                 var added = false
                                 result.data.items.forEach { item ->
-                                    if (collectedNames.add(item.name)) added = true
+                                    val suggestion = item.toSearchSuggestion(addon.baseUrl)
+                                    // Dedup by title+year: merges the same show coming from two
+                                    // catalogs while keeping remakes apart (One Piece 1999 vs 2023).
+                                    val key = "${normalizeForSearch(suggestion.name)}|${suggestion.year ?: item.id}"
+                                    val entry = arrivalOrder.getAndIncrement() to suggestion
+                                    val kept = collected.merge(key, entry) { existing, incoming ->
+                                        val ep = existing.second.popularity ?: Double.NEGATIVE_INFINITY
+                                        val ip = incoming.second.popularity ?: Double.NEGATIVE_INFINITY
+                                        if (ip > ep) incoming else existing  // keep the more popular
+                                    }
+                                    if (kept === entry) added = true
                                 }
-                                // Push updated suggestions immediately as each addon responds
+                                // Push updated suggestions immediately as each addon responds.
+                                // Rank by relevance tier first (exact > word-prefix > mid-word
+                                // substring), then by popularity within a tier.
                                 if (added) {
-                                    val sorted = collectedNames
+                                    val sorted = collected.values
+                                        // Keep title matches, plus popular alternate-title hits
+                                        // (e.g. "Money Heist" for "casa"); drop scoreless noise.
+                                        .filter {
+                                            normalizeForSearch(it.second.name).contains(normQuery) ||
+                                                it.second.popularity != null
+                                        }
+                                        // Relevance tier, then popularity, then rating; nulls-last so
+                                        // addons without scores keep their own order.
                                         .sortedWith(
-                                            compareByDescending<String> { it.lowercase().startsWith(queryLower) }
-                                                .thenBy { it.lowercase() }
+                                            compareBy<Pair<Int, SearchSuggestion>> { relevanceTier(it.second.name, normQuery) }
+                                                .thenByDescending { it.second.popularity ?: Double.NEGATIVE_INFINITY }
+                                                .thenByDescending { it.second.rating ?: Float.NEGATIVE_INFINITY }
+                                                .thenBy { it.first }
                                         )
+                                        .map { it.second }
                                         .take(MAX_SUGGESTIONS)
                                     _uiState.update { it.copy(suggestions = sorted) }
                                 }
@@ -287,6 +313,17 @@ class SearchViewModel @Inject constructor(
     private fun clearRecentSearches() {
         viewModelScope.launch {
             searchHistoryDataStore.clearRecentSearches()
+        }
+    }
+
+    /** Records history when a dropdown suggestion is picked (it opens detail
+     *  directly, bypassing [performSearch]). */
+    fun recordRecentSearch(query: String) {
+        val q = query.trim()
+        if (q.length >= 2) {
+            viewModelScope.launch {
+                searchHistoryDataStore.saveRecentSearch(q, MAX_RECENT_SEARCHES)
+            }
         }
     }
 
@@ -844,5 +881,44 @@ class SearchViewModel @Inject constructor(
 
     private fun catalogKey(addonId: String, type: String, catalogId: String): String {
         return "${addonId}_${type}_$catalogId"
+    }
+
+    private fun MetaPreview.toSearchSuggestion(addonBaseUrl: String): SearchSuggestion {
+        return SearchSuggestion(
+            id = id,
+            type = apiType,
+            name = name,
+            poster = poster,
+            year = releaseInfo?.let { YEAR_REGEX.find(it)?.value },
+            addonBaseUrl = addonBaseUrl,
+            popularity = popularity,
+            rating = imdbRating
+        )
+    }
+}
+
+private val YEAR_REGEX = Regex("""(19|20)\d{2}""")
+private val DIACRITICS_REGEX = Regex("\\p{Mn}+")
+
+/** Lowercase + strip diacritics so matching is accent-insensitive ("Pokémon" -> "pokemon"). */
+private fun normalizeForSearch(s: String): String {
+    val decomposed = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD)
+    return DIACRITICS_REGEX.replace(decomposed, "").lowercase()
+}
+
+/**
+ * Relevance bucket, lowest = most relevant. A query word at the title's head
+ * (index 0/1) outranks one buried deeper, so a leading article ("The Terminator")
+ * doesn't push the match down — without any per-language article list.
+ */
+private fun relevanceTier(name: String, normQuery: String): Int {
+    val n = normalizeForSearch(name)
+    if (n == normQuery) return 0
+    val wordIdx = n.split(' ', ':', '-', '.', '\'').indexOfFirst { it.startsWith(normQuery) }
+    return when {
+        n.startsWith(normQuery) || wordIdx in 0..1 -> 1
+        wordIdx >= 2 -> 2
+        n.contains(normQuery) -> 3
+        else -> 4
     }
 }
