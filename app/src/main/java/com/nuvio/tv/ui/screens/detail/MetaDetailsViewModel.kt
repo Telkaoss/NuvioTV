@@ -125,6 +125,7 @@ class MetaDetailsViewModel @Inject constructor(
 
     private var trailerDelayMs = 7000L
     private var trailerAutoplayEnabled = false
+    private var alwaysExternalTrailer = false
     private var trailerHasPlayed = false
     private var suppressSeasonAutoSwitch = false
 
@@ -177,6 +178,13 @@ class MetaDetailsViewModel @Inject constructor(
                             state.copy(trailerButtonEnabled = enabled)
                         }
                     }
+                }
+        }
+        viewModelScope.launch {
+            layoutPreferenceDataStore.alwaysExternalTrailer
+                .distinctUntilChanged()
+                .collectLatest { enabled ->
+                    alwaysExternalTrailer = enabled
                 }
         }
     }
@@ -2370,6 +2378,31 @@ class MetaDetailsViewModel @Inject constructor(
                 null
             }
 
+            // External-player mode (toggle): skip in-app extraction entirely and resolve the external
+            // YouTube URL — just a fast TMDB key lookup, so the trailer button appears instantly and
+            // the trailer opens/autoplays in the user's default YouTube player (SmartTube, YouTube,
+            // …), which works even when YouTube blocks this network.
+            if (alwaysExternalTrailer && AppFeaturePolicy.externalTrailerPlaybackEnabled) {
+                val externalUrl = trailerService.getExternalTrailerUrl(
+                    tmdbId = tmdbId,
+                    type = meta.apiType
+                ) ?: meta.trailerYtIds.firstOrNull()?.let { ytId ->
+                    "https://www.youtube.com/watch?v=$ytId"
+                }
+                _uiState.update { state ->
+                    state.copy(
+                        trailerUrl = externalUrl,
+                        trailerAudioUrl = null,
+                        isExternalTrailer = externalUrl != null,
+                        isTrailerLoading = false
+                    )
+                }
+                if (externalUrl != null && isPlayButtonFocused) {
+                    startIdleTimer()
+                }
+                return@launch
+            }
+
             val source = if (AppFeaturePolicy.inAppTrailerPlaybackEnabled) {
                 trailerService.getTrailerPlaybackSource(
                     title = meta.name,
@@ -2402,6 +2435,7 @@ class MetaDetailsViewModel @Inject constructor(
             _uiState.update { state ->
                 if (state.trailerUrl == url &&
                     state.trailerAudioUrl == audioUrl &&
+                    !state.isExternalTrailer &&
                     !state.isTrailerLoading
                 ) {
                     state
@@ -2409,6 +2443,7 @@ class MetaDetailsViewModel @Inject constructor(
                     state.copy(
                         trailerUrl = url,
                         trailerAudioUrl = audioUrl,
+                        isExternalTrailer = false,
                         isTrailerLoading = false
                     )
                 }
@@ -2422,7 +2457,6 @@ class MetaDetailsViewModel @Inject constructor(
 
     private fun startIdleTimer() {
         idleTimerJob?.cancel()
-        if (!AppFeaturePolicy.inAppTrailerPlaybackEnabled) return
 
         val state = _uiState.value
         if (state.trailerUrl == null || state.isTrailerPlaying) return
@@ -2430,6 +2464,20 @@ class MetaDetailsViewModel @Inject constructor(
         if (trailerHasPlayed) return
         if (!isPlayButtonFocused) return
 
+        if (state.isExternalTrailer) {
+            // Autoplay in external mode: after the same idle delay, launch the trailer in the
+            // external player (re-checking focus so we don't interrupt if the user navigated away).
+            val url = state.trailerUrl ?: return
+            idleTimerJob = viewModelScope.launch {
+                delay(trailerDelayMs)
+                if (!isPlayButtonFocused) return@launch
+                trailerHasPlayed = true
+                openExternalTrailer(url)
+            }
+            return
+        }
+
+        if (!AppFeaturePolicy.inAppTrailerPlaybackEnabled) return
         idleTimerJob = viewModelScope.launch {
             delay(trailerDelayMs)
             setTrailerPlaybackState(
@@ -2481,7 +2529,8 @@ class MetaDetailsViewModel @Inject constructor(
     private fun handleTrailerButtonClick() {
         val state = _uiState.value
         if (state.trailerUrl.isNullOrBlank()) return
-        if (!AppFeaturePolicy.inAppTrailerPlaybackEnabled) {
+        // External fallback (e.g. YouTube-blocked IP): open in SmartTube / an external player.
+        if (state.isExternalTrailer || !AppFeaturePolicy.inAppTrailerPlaybackEnabled) {
             openExternalTrailer(state.trailerUrl)
             return
         }
@@ -2579,6 +2628,9 @@ class MetaDetailsViewModel @Inject constructor(
 
     private fun openExternalTrailer(url: String) {
         runCatching {
+            // Hand the YouTube URL to the user's preferred YouTube player (SmartTube, the YouTube
+            // app, etc.) via the system's default-app resolution. A signed-in player plays the
+            // trailer even when YouTube blocks this network.
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)

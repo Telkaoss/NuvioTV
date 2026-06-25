@@ -515,6 +515,20 @@ fun LayoutSettingsContent(
                     )
 
                     CompactToggleRow(
+                        title = stringResource(R.string.layout_always_external_trailer),
+                        subtitle = stringResource(R.string.layout_always_external_trailer_sub),
+                        checked = uiState.alwaysExternalTrailer,
+                        onToggle = {
+                            viewModel.onEvent(
+                                LayoutSettingsEvent.SetAlwaysExternalTrailer(
+                                    !uiState.alwaysExternalTrailer
+                                )
+                            )
+                        },
+                        onFocused = { focusedSection = LayoutSettingsSection.DETAIL_PAGE }
+                    )
+
+                    CompactToggleRow(
                         title = stringResource(R.string.layout_prefer_external_meta),
                         subtitle = stringResource(R.string.layout_prefer_external_meta_sub),
                         checked = uiState.preferExternalMetaAddonDetail,

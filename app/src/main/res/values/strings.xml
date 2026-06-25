@@ -865,6 +865,8 @@
     <string name="layout_cw_sort_streaming_desc">Released items first, upcoming at the end</string>
     <string name="layout_trailer_button">Show Trailer Button</string>
     <string name="layout_trailer_button_sub">Show trailer button on detail page (only when trailer is available).</string>
+    <string name="layout_always_external_trailer">Open Trailers Externally</string>
+    <string name="layout_always_external_trailer_sub">Play trailers in your YouTube app, instead of in-app. Useful when trailers won\'t load on your network.</string>
     <string name="layout_prefer_external_meta">Prefer meta from external addon</string>
     <string name="layout_prefer_external_meta_sub">Use metadata from external addon instead of catalog addon.</string>
     <string name="layout_show_full_release_date">Show full release date</string>

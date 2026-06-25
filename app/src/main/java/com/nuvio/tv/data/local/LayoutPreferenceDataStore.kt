@@ -78,6 +78,7 @@ class LayoutPreferenceDataStore @Inject constructor(
     private val blurContinueWatchingNextUpKey = booleanPreferencesKey("blur_continue_watching_next_up")
     private val continueWatchingSortModeKey = stringPreferencesKey("continue_watching_sort_mode")
     private val detailPageTrailerButtonEnabledKey = booleanPreferencesKey("detail_page_trailer_button_enabled")
+    private val alwaysExternalTrailerKey = booleanPreferencesKey("always_external_trailer")
     private val preferExternalMetaAddonDetailKey = booleanPreferencesKey("prefer_external_meta_addon_detail")
     private val modernHeroFullScreenBackdropKey = booleanPreferencesKey("modern_hero_full_screen_backdrop")
     private val hideUnreleasedContentKey = booleanPreferencesKey("hide_unreleased_content")
@@ -278,6 +279,10 @@ class LayoutPreferenceDataStore @Inject constructor(
 
     val detailPageTrailerButtonEnabled: Flow<Boolean> = profileFlow { prefs ->
         prefs[detailPageTrailerButtonEnabledKey] ?: true
+    }
+
+    val alwaysExternalTrailer: Flow<Boolean> = profileFlow { prefs ->
+        prefs[alwaysExternalTrailerKey] ?: false
     }
 
     val preferExternalMetaAddonDetail: Flow<Boolean> = profileFlow { prefs ->
@@ -570,6 +575,12 @@ class LayoutPreferenceDataStore @Inject constructor(
     suspend fun setDetailPageTrailerButtonEnabled(enabled: Boolean) {
         store().edit { prefs ->
             prefs[detailPageTrailerButtonEnabledKey] = enabled
+        }
+    }
+
+    suspend fun setAlwaysExternalTrailer(enabled: Boolean) {
+        store().edit { prefs ->
+            prefs[alwaysExternalTrailerKey] = enabled
         }
     }
 

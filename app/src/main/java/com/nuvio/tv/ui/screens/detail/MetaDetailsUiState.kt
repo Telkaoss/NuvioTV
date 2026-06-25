@@ -33,6 +33,10 @@ data class MetaDetailsUiState(
     val episodeProgressMap: Map<Pair<Int, Int>, WatchProgress> = emptyMap(),
     val trailerUrl: String? = null,
     val trailerAudioUrl: String? = null,
+    // When true, [trailerUrl] is a youtube.com watch URL to open in an external app (SmartTube)
+    // rather than play in-app — used as a fallback when in-app extraction fails (e.g. a YouTube-
+    // blocked IP). The inline autoplay preview is skipped in this case.
+    val isExternalTrailer: Boolean = false,
     val isTrailerPlaying: Boolean = false,
     val isTrailerLoading: Boolean = false,
     val showTrailerControls: Boolean = false,
