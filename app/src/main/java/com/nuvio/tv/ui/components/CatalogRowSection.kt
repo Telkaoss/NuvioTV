@@ -66,6 +66,7 @@ import com.nuvio.tv.domain.model.CatalogRow
 import com.nuvio.tv.domain.model.CardDepthSurface
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.stableItemKey
+import com.nuvio.tv.domain.model.stableItemKeys
 import com.nuvio.tv.domain.model.PLACEHOLDER_IMAGE_URL
 import com.nuvio.tv.ui.util.formatAddonTypeLabel
 import com.nuvio.tv.ui.util.localizedContentType
@@ -110,8 +111,9 @@ fun CatalogRowSection(
     upFocusRequester: FocusRequester? = null,
     listState: LazyListState = rememberLazyListState(initialFirstVisibleItemIndex = initialScrollIndex)
 ) {
+    val rowItemKeys = remember(catalogRow.items) { catalogRow.stableItemKeys() }
     fun rowItemFocusKey(index: Int, item: MetaPreview): String {
-        return catalogRow.stableItemKey(index)
+        return rowItemKeys.getOrElse(index) { catalogRow.stableItemKey(item) }
     }
 
     val seeAllCardShape = RoundedCornerShape(posterCardStyle.cornerRadius)
