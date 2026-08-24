@@ -21,7 +21,11 @@ data class CatalogRow(
     val skipStep: Int = 100,
     val nextSkip: Int = 0,
     val consecutiveDuplicatePages: Int = 0,
-    val extraArgs: Map<String, String> = emptyMap()
+    val extraArgs: Map<String, String> = emptyMap(),
+    /** True when the response came from cache or the addon answered 304. */
+    val notModified: Boolean = false,
+    /** Instant before which this row must not be re-requested. Default: the addon said nothing. */
+    val freshUntilMs: Long = Long.MAX_VALUE
 ) {
     val apiType: String
         get() = type.toApiString(rawType)
@@ -109,6 +113,10 @@ fun CatalogRow.mergeCatalogPage(
         hasMore = hasMore,
         currentPage = currentPage + 1,
         nextSkip = advancedSkip,
-        consecutiveDuplicatePages = duplicatePageCount
+        consecutiveDuplicatePages = duplicatePageCount,
+        // Freshness describes page 1, which is what gets re-requested; a paginated page says
+        // nothing about it and must not overwrite it.
+        notModified = notModified,
+        freshUntilMs = freshUntilMs
     )
 }

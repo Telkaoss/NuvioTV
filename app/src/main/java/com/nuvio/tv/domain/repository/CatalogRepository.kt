@@ -15,6 +15,8 @@ interface CatalogRepository {
         skip: Int = 0,
         skipStep: Int = 100,
         extraArgs: Map<String, String> = emptyMap(),
-        supportsSkip: Boolean = false
+        supportsSkip: Boolean = false,
+        /** Ignore any cached freshness and revalidate with the addon (a 304 is still possible). */
+        forceNetwork: Boolean = false
     ): Flow<NetworkResult<CatalogRow>>
 }

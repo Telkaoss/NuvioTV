@@ -194,6 +194,9 @@ fun ModernHomeContent(
     val loadMoreRequestedTotals = remember { mutableStateMapOf<String, Int>() }
 
     val focusedItemByRow = remember { mutableStateMapOf<String, Int>() }
+    // Item keys of each row as they were when its focused index was last recorded, so the index
+    // can be relocated when an in-place refresh shifts the row instead of pointing at a new item.
+    val previousItemKeysByRow = remember { mutableMapOf<String, List<String>>() }
     val stableFocusedItemByRow = remember { StableRef<MutableMap<String, Int>>(focusedItemByRow) }
     val stableRowListStates = remember { StableRef<MutableMap<String, LazyListState>>(rowListStates) }
     val stableLoadMoreRequestedTotals = remember { StableRef<MutableMap<String, Int>>(loadMoreRequestedTotals) }
@@ -325,6 +328,21 @@ fun ModernHomeContent(
     LaunchedEffect(carouselRows, focusState.hasSavedFocus) {
         rowListStates.keys.retainAll(activeRowKeys)
         loadMoreRequestedTotals.keys.retainAll(activeRowKeys)
+        previousItemKeysByRow.keys.retainAll(activeRowKeys)
+        carouselRows.list.forEach { row ->
+            val currentKeys = row.items.list.map { it.key }
+            val storedIdx = focusedItemByRow[row.key]
+            val relocated = if (storedIdx != null) {
+                previousItemKeysByRow[row.key]
+                    ?.getOrNull(storedIdx)
+                    ?.let { currentKeys.indexOf(it) }
+                    ?.takeIf { it >= 0 }
+            } else null
+            if (relocated != null && relocated != storedIdx) {
+                focusedItemByRow[row.key] = relocated
+            }
+            previousItemKeysByRow[row.key] = currentKeys
+        }
         val staleSelection = focusedCatalogSelection.value?.let { selection ->
             when (val payload = selection.payload) {
                 is ModernPayload.Catalog -> !payload.itemId.startsWith("__placeholder_") && payload.itemId !in activeCatalogItemIds.set
@@ -460,7 +478,7 @@ fun ModernHomeContent(
         }
     }
 
-    LaunchedEffect(activeRow?.key, activeRow?.items?.size) {
+    LaunchedEffect(activeRow?.key, activeRow?.items) {
         val row = activeRow ?: return@LaunchedEffect
         val savedIdx = focusedItemByRow[row.key] ?: 0
         val clampedIndex = savedIdx.coerceIn(0, (row.items.size - 1).coerceAtLeast(0))

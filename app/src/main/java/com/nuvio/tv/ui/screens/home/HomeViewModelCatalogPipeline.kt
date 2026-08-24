@@ -424,7 +424,9 @@ internal fun HomeViewModel.loadCatalogPipeline(
                 type = catalog.apiType,
                 skip = 0,
                 skipStep = skipStep,
-                supportsSkip = supportsSkip
+                supportsSkip = supportsSkip,
+                // A full load (cold start, addon change) must not be served stale from the cache.
+                forceNetwork = true
             ).collect { result ->
                 if (generation != catalogLoadGeneration) return@collect
                 when (result) {
@@ -873,6 +875,7 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
             error = if (hasContent) null else state.error
         )
     }
+    scheduleNextCatalogRefreshPipeline()
 
     val tmdbSettings = currentTmdbSettings
     val tmdbEnabledForCurrentLayout = tmdbSettings.enabled &&
@@ -1073,4 +1076,111 @@ private fun HomeViewModel.reconcileFullyWatchedFromLocalItems(
         fullyWatchedSeriesIds.updateWithValidation(mergedHolderIds, cacheResolvedIds)
     }
     return mergedHolderIds
+}
+
+/**
+ * Re-requests page 1 of every loaded home catalog without tearing the UI down.
+ *
+ * OkHttp decides on its own whether each request touches the network, from the
+ * Cache-Control / ETag the addon sent. Rows that come back unchanged (served from
+ * cache, or revalidated with a 304) are left completely untouched, so focus and
+ * scroll position survive. Only genuinely new items are prepended to their row;
+ * existing items and pagination state are preserved.
+ */
+/**
+ * Re-requests page 1 of the loaded home catalogs without tearing the UI down. A row the addon
+ * still considers fresh is skipped without a request; a row that comes back unchanged is left
+ * untouched so focus and scroll survive; only genuinely new items are prepended.
+ */
+internal fun HomeViewModel.refreshCatalogsInPlacePipeline() {
+    if (catalogRefreshInProgress) return
+    val (orderedKeys, snapshot) = snapshotCatalogState()
+    if (orderedKeys.isEmpty()) return
+    catalogRefreshInProgress = true
+    // Stamped here, not in the caller: a swallowed call must not consume the debounce window.
+    lastCatalogRefreshAtMs = System.currentTimeMillis()
+    val generation = catalogLoadGeneration
+    catalogRefreshJob = viewModelScope.launch {
+        var changedRows = 0
+        try {
+            val now = System.currentTimeMillis()
+            orderedKeys.forEach { key ->
+                if (generation != catalogLoadGeneration) return@forEach
+                val row = snapshot[key] ?: return@forEach
+                if (row.items.isEmpty()) return@forEach
+                if (row.freshUntilMs > now) return@forEach
+                catalogRepository.getCatalog(
+                    addonBaseUrl = row.addonBaseUrl,
+                    addonId = row.addonId,
+                    addonName = row.addonName,
+                    catalogId = row.catalogId,
+                    catalogName = row.catalogName,
+                    type = row.apiType,
+                    skip = 0,
+                    skipStep = row.skipStep,
+                    extraArgs = row.extraArgs,
+                    supportsSkip = row.supportsSkip
+                ).collect { result ->
+                    if (result !is NetworkResult.Success) return@collect
+                    // A full reload superseded this sweep; its rows are authoritative now.
+                    if (generation != catalogLoadGeneration) return@collect
+                    val fresh = result.data
+                    if (fresh.notModified) {
+                        updateCatalogRow(key) { it.copy(freshUntilMs = fresh.freshUntilMs) }
+                        return@collect
+                    }
+                    val current = readCatalogRow(key) ?: row
+                    val existingIds = current.items.mapTo(HashSet()) { "${it.apiType}:${it.id}" }
+                    val added = fresh.items.filter { "${it.apiType}:${it.id}" !in existingIds }
+                    if (added.isEmpty()) {
+                        updateCatalogRow(key) { it.copy(freshUntilMs = fresh.freshUntilMs) }
+                        return@collect
+                    }
+                    // The row grew by as many items as the addon put in front of it, so the
+                    // pagination window has to move by the same amount to stay aligned with the
+                    // list the addon is paging through.
+                    val shiftedSkip = if (current.supportsSkip && current.nextSkip > 0) {
+                        current.nextSkip + added.size
+                    } else {
+                        current.nextSkip
+                    }
+                    replaceCatalogRow(
+                        key,
+                        current.copy(
+                            items = added + current.items,
+                            nextSkip = shiftedSkip,
+                            freshUntilMs = fresh.freshUntilMs
+                        )
+                    )
+                    changedRows++
+                    Log.d(
+                        HomeViewModel.TAG,
+                        "Catalog refresh: +${added.size} item(s) addonId=${row.addonId} catalogId=${row.catalogId}"
+                    )
+                }
+            }
+        } finally {
+            catalogRefreshInProgress = false
+        }
+        if (changedRows > 0) scheduleUpdateCatalogRows()
+        scheduleNextCatalogRefreshPipeline()
+    }
+}
+
+/**
+ * Wakes up when the earliest addon-declared freshness expires, so a row can refill while the user
+ * stays on Home. A row whose addon declared no expiry has nothing to schedule from and is skipped.
+ */
+internal fun HomeViewModel.scheduleNextCatalogRefreshPipeline() {
+    catalogFreshnessJob?.cancel()
+    if (!catalogFreshnessWatchActive) return
+    val now = System.currentTimeMillis()
+    val (_, snapshot) = snapshotCatalogState()
+    val nextExpiry = snapshot.values
+        .filter { it.items.isNotEmpty() && it.freshUntilMs != Long.MAX_VALUE && it.freshUntilMs > now }
+        .minOfOrNull { it.freshUntilMs } ?: return
+    catalogFreshnessJob = viewModelScope.launch {
+        delay(nextExpiry - now)
+        refreshCatalogsIfStale(debounceMs = 0L)
+    }
 }

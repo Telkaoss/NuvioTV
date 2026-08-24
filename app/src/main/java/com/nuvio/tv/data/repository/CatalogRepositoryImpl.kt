@@ -35,7 +35,8 @@ class CatalogRepositoryImpl @Inject constructor(
         skip: Int,
         skipStep: Int,
         extraArgs: Map<String, String>,
-        supportsSkip: Boolean
+        supportsSkip: Boolean,
+        forceNetwork: Boolean
     ): Flow<NetworkResult<CatalogRow>> = flow {
         emit(NetworkResult.Loading)
 
@@ -45,15 +46,27 @@ class CatalogRepositoryImpl @Inject constructor(
             "Fetching catalog addonId=$addonId addonName=$addonName type=$type catalogId=$catalogId skip=$skip skipStep=$skipStep supportsSkip=$supportsSkip url=$url"
         )
 
-        when (val result = safeApiCall(context) { api.getCatalog(url) }) {
+        var lastRaw: okhttp3.Response? = null
+        // `max-age=0`, not `no-cache`: the stored entry is treated as stale, so OkHttp still
+        // revalidates with its ETag and can settle for a 304. `no-cache` would drop the entry
+        // and refetch the whole body.
+        val requestCacheControl = if (forceNetwork) "max-age=0" else null
+        when (val result = safeApiCall(context) {
+            api.getCatalog(url, requestCacheControl).also { lastRaw = it.raw() }
+        }) {
             is NetworkResult.Success -> {
+                val raw = lastRaw
+                // No networkResponse means OkHttp served it from cache; 304 means it revalidated.
+                val unchanged = raw != null &&
+                    (raw.networkResponse == null || raw.networkResponse?.code == 304)
+                val freshUntil = resolveCatalogFreshness(raw)
                 val rawItemCount = result.data.metas.size
                 val items = result.data.metas
                     .mapNotNull { it?.toDomainOrNull(type, addonBaseUrl) }
                     .distinctBy { it.id }
                 Log.d(
                     TAG,
-                    "Catalog fetch success addonId=$addonId type=$type catalogId=$catalogId items=${items.size}"
+                    "Catalog fetch success addonId=$addonId type=$type catalogId=$catalogId items=${items.size} unchanged=$unchanged"
                 )
 
                 val catalogRow = CatalogRow(
@@ -71,7 +84,9 @@ class CatalogRepositoryImpl @Inject constructor(
                     supportsSkip = supportsSkip,
                     skipStep = skipStep,
                     nextSkip = if (supportsSkip && rawItemCount > 0) skip + rawItemCount else skip,
-                    extraArgs = extraArgs
+                    extraArgs = extraArgs,
+                    notModified = unchanged,
+                    freshUntilMs = freshUntil
                 )
                 emit(NetworkResult.Success(catalogRow))
             }
@@ -125,4 +140,37 @@ class CatalogRepositoryImpl @Inject constructor(
     private fun encodeArg(value: String): String {
         return URLEncoder.encode(value, "UTF-8").replace("+", "%20")
     }
+
+    /**
+     * Instant until which this response can be reused, taken from the addon's own `Cache-Control`.
+     * `max-age` counts from when the response was generated, so the `Age` it carries and the time
+     * OkHttp has held it are both subtracted.
+     */
+    private fun resolveCatalogFreshness(raw: okhttp3.Response?): Long {
+        if (raw == null) return Long.MAX_VALUE
+        val cacheControl = raw.cacheControl
+        val maxAgeMs = cacheControl.maxAgeSeconds.takeIf { it >= 0 }?.let { it * 1000L }
+            ?: return resolveFreshnessWithoutMaxAge(raw, cacheControl)
+        val now = System.currentTimeMillis()
+        val apparentAgeMs = raw.headers.getDate("Date")
+            ?.let { (raw.receivedResponseAtMillis - it.time).coerceAtLeast(0L) } ?: 0L
+        val ageHeaderMs = (raw.headers["Age"]?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L) * 1000L
+        val ageAtReceiptMs = maxOf(apparentAgeMs, ageHeaderMs)
+        val heldSinceReceiptMs = (now - raw.receivedResponseAtMillis).coerceAtLeast(0L)
+        val remainingMs = (maxAgeMs - ageAtReceiptMs - heldSinceReceiptMs).coerceAtLeast(0L)
+        return now + remainingMs
+    }
+
+    /**
+     * `s-maxage` targets shared caches, and a `Last-Modified` is no promise that the addon
+     * honours `If-Modified-Since` (some answer with a full 200), so neither is trusted here.
+     */
+    private fun resolveFreshnessWithoutMaxAge(
+        raw: okhttp3.Response,
+        cacheControl: okhttp3.CacheControl
+    ): Long {
+        if (cacheControl.noCache || cacheControl.noStore) return 0L
+        return if (!raw.header("ETag").isNullOrBlank()) 0L else Long.MAX_VALUE
+    }
+
 }

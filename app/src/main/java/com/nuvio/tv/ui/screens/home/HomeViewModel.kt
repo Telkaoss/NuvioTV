@@ -180,6 +180,8 @@ class HomeViewModel @Inject constructor(
     internal val catalogItemKeyIndex = mutableMapOf<String, MutableSet<String>>()
     internal val catalogOrder = mutableListOf<String>()
     internal var addonsCache: List<Addon> = emptyList()
+    internal var lastCatalogRefreshAtMs: Long = 0L
+    internal var catalogRefreshInProgress: Boolean = false
     internal var collectionsCache: List<Collection> = emptyList()
     internal var homeCatalogOrderKeys: List<String> = emptyList()
     internal var disabledHomeCatalogKeys: Set<String> = emptySet()
@@ -187,6 +189,9 @@ class HomeViewModel @Inject constructor(
     internal var customCatalogTitles: Map<String, String> = emptyMap()
     internal var currentHeroCatalogKeys: List<String> = emptyList()
     internal var catalogUpdateJob: Job? = null
+    internal var catalogFreshnessJob: Job? = null
+    internal var catalogRefreshJob: Job? = null
+    internal var catalogFreshnessWatchActive: Boolean = false
     internal var hasRenderedFirstCatalog = false
     internal val catalogLoadSemaphore = Semaphore(MAX_CATALOG_LOAD_CONCURRENCY)
     internal var pendingCatalogLoads = 0
@@ -713,6 +718,28 @@ class HomeViewModel @Inject constructor(
 
     private suspend fun loadAllCatalogs(addons: List<Addon>, forceReload: Boolean = false) =
         loadAllCatalogsPipeline(addons, forceReload)
+
+    /** Watches for addon-declared freshness expiring while Home stays on screen. */
+    fun startCatalogFreshnessWatch() {
+        catalogFreshnessWatchActive = true
+        scheduleNextCatalogRefreshPipeline()
+    }
+
+    fun stopCatalogFreshnessWatch() {
+        catalogFreshnessWatchActive = false
+        catalogFreshnessJob?.cancel()
+        catalogFreshnessJob = null
+        catalogRefreshJob?.cancel()
+        catalogRefreshJob = null
+    }
+
+    /** [debounceMs] only collapses bursts of lifecycle events; it is not a refresh policy. */
+    fun refreshCatalogsIfStale(debounceMs: Long = 5_000L) {
+        if (addonsCache.isEmpty()) return
+        val last = lastCatalogRefreshAtMs
+        if (last != 0L && System.currentTimeMillis() - last < debounceMs) return
+        refreshCatalogsInPlacePipeline()
+    }
 
     private fun loadCatalog(addon: Addon, catalog: CatalogDescriptor, generation: Long) =
         loadCatalogPipeline(addon, catalog, generation)
