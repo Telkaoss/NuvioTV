@@ -734,11 +734,11 @@ class HomeViewModel @Inject constructor(
     }
 
     /** [debounceMs] only collapses bursts of lifecycle events; it is not a refresh policy. */
-    fun refreshCatalogsIfStale(debounceMs: Long = 5_000L) {
+    fun refreshCatalogsIfStale(debounceMs: Long = 5_000L, onScreen: Boolean = false) {
         if (addonsCache.isEmpty()) return
         val last = lastCatalogRefreshAtMs
         if (last != 0L && System.currentTimeMillis() - last < debounceMs) return
-        refreshCatalogsInPlacePipeline()
+        refreshCatalogsInPlacePipeline(onScreen)
     }
 
     private fun loadCatalog(addon: Addon, catalog: CatalogDescriptor, generation: Long) =

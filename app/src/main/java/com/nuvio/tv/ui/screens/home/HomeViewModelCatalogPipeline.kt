@@ -1092,7 +1092,7 @@ private fun HomeViewModel.reconcileFullyWatchedFromLocalItems(
  * still considers fresh is skipped without a request; a row that comes back unchanged is left
  * untouched so focus and scroll survive; only genuinely new items are prepended.
  */
-internal fun HomeViewModel.refreshCatalogsInPlacePipeline() {
+internal fun HomeViewModel.refreshCatalogsInPlacePipeline(onScreen: Boolean = false) {
     if (catalogRefreshInProgress) return
     val (orderedKeys, snapshot) = snapshotCatalogState()
     if (orderedKeys.isEmpty()) return
@@ -1125,37 +1125,73 @@ internal fun HomeViewModel.refreshCatalogsInPlacePipeline() {
                     // A full reload superseded this sweep; its rows are authoritative now.
                     if (generation != catalogLoadGeneration) return@collect
                     val fresh = result.data
-                    if (fresh.notModified) {
-                        updateCatalogRow(key) { it.copy(freshUntilMs = fresh.freshUntilMs) }
-                        return@collect
-                    }
+                    // No early exit on a 304: the body still comes back (from OkHttp's cache),
+                    // and "the addon has not changed since we last asked" is not the same as "our
+                    // row matches the addon's page 1". Skipping the comparison would let an
+                    // earlier divergence survive for as long as the addon sits still.
                     val current = readCatalogRow(key) ?: row
-                    val existingIds = current.items.mapTo(HashSet()) { "${it.apiType}:${it.id}" }
-                    val added = fresh.items.filter { "${it.apiType}:${it.id}" !in existingIds }
-                    if (added.isEmpty()) {
+                    val identity = { item: MetaPreview -> item.apiType + ":" + item.id }
+                    val existingIds = current.items.mapTo(HashSet(), identity)
+                    // Items the addon now shows in front of everything we already hold.
+                    val added = fresh.items.takeWhile { identity(it) !in existingIds }
+                    val rest = fresh.items.drop(added.size)
+                    // A prepend is only a prepend if what follows the new items still matches the
+                    // head of the row, in the same order. Anything else (a reorder, a removal, a
+                    // wholesale turnover) cannot be expressed by putting items in front, and
+                    // trying would leave the row out of order, padded with entries the addon no
+                    // longer serves, or missing the ones page 1 pushed further down.
+                    val isPrepend = rest.isNotEmpty() &&
+                        rest.size <= current.items.size &&
+                        rest.indices.all { identity(rest[it]) == identity(current.items[it]) }
+
+                    if (isPrepend && added.isEmpty()) {
                         updateCatalogRow(key) { it.copy(freshUntilMs = fresh.freshUntilMs) }
                         return@collect
                     }
-                    // The row grew by as many items as the addon put in front of it, so the
-                    // pagination window has to move by the same amount to stay aligned with the
-                    // list the addon is paging through.
-                    val shiftedSkip = if (current.supportsSkip && current.nextSkip > 0) {
-                        current.nextSkip + added.size
-                    } else {
-                        current.nextSkip
-                    }
-                    replaceCatalogRow(
-                        key,
-                        current.copy(
-                            items = added + current.items,
-                            nextSkip = shiftedSkip,
-                            freshUntilMs = fresh.freshUntilMs
+                    if (isPrepend) {
+                        // The row grew by as many items as the addon put in front of it, so the
+                        // pagination window has to move by the same amount to stay aligned with
+                        // the list the addon is paging through.
+                        val shiftedSkip = if (current.supportsSkip && current.nextSkip > 0) {
+                            current.nextSkip + added.size
+                        } else {
+                            current.nextSkip
+                        }
+                        replaceCatalogRow(
+                            key,
+                            current.copy(
+                                items = added + current.items,
+                                nextSkip = shiftedSkip,
+                                freshUntilMs = fresh.freshUntilMs
+                            )
                         )
-                    )
+                        changedRows++
+                        Log.d(
+                            HomeViewModel.TAG,
+                            "Catalog refresh: +${added.size} item(s) addonId=${row.addonId} catalogId=${row.catalogId}"
+                        )
+                        return@collect
+                    }
+                    if (onScreen) {
+                        // Reloading a row rebuilds every card in it, which throws the focus out of
+                        // the row the user is looking at. Hold it back and let the next return to
+                        // Home apply it, when focus is being re-established anyway. Marking the row
+                        // stale also takes it out of the scheduler, so this does not spin.
+                        updateCatalogRow(key) { it.copy(freshUntilMs = 0L) }
+                        Log.d(
+                            HomeViewModel.TAG,
+                            "Catalog refresh: reload deferred to next resume addonId=${row.addonId} catalogId=${row.catalogId}"
+                        )
+                        return@collect
+                    }
+                    // Page 1 moved in a way a prepend cannot describe. Take it as the row and let
+                    // pagination rebuild the rest, which costs one request on the next scroll and
+                    // is the only way to end up with the right items in the right order.
+                    replaceCatalogRow(key, fresh)
                     changedRows++
                     Log.d(
                         HomeViewModel.TAG,
-                        "Catalog refresh: +${added.size} item(s) addonId=${row.addonId} catalogId=${row.catalogId}"
+                        "Catalog refresh: page 1 reloaded addonId=${row.addonId} catalogId=${row.catalogId}"
                     )
                 }
             }
@@ -1181,6 +1217,6 @@ internal fun HomeViewModel.scheduleNextCatalogRefreshPipeline() {
         .minOfOrNull { it.freshUntilMs } ?: return
     catalogFreshnessJob = viewModelScope.launch {
         delay(nextExpiry - now)
-        refreshCatalogsIfStale(debounceMs = 0L)
+        refreshCatalogsIfStale(debounceMs = 0L, onScreen = true)
     }
 }
