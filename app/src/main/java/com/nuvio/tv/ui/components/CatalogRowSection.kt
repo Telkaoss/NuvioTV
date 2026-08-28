@@ -67,6 +67,7 @@ import com.nuvio.tv.domain.model.CardDepthSurface
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.stableItemKey
 import com.nuvio.tv.domain.model.stableItemKeys
+import com.nuvio.tv.domain.model.stableKey
 import com.nuvio.tv.domain.model.PLACEHOLDER_IMAGE_URL
 import com.nuvio.tv.ui.util.formatAddonTypeLabel
 import com.nuvio.tv.ui.util.localizedContentType
@@ -112,7 +113,28 @@ fun CatalogRowSection(
     listState: LazyListState = rememberLazyListState(initialFirstVisibleItemIndex = initialScrollIndex)
 ) {
     val rowItemKeys = remember(catalogRow.items) { catalogRow.stableItemKeys() }
+
+    // Item keys carry item identity, so the placeholder the ring sits on does not survive real
+    // data arriving: its key changes and Compose tears the focused node down, which drops focus
+    // and leaves a bringIntoView firing from a node that no longer exists.
+    //
+    // Give the first card a positional key for as long as the ring can be on it. The node is
+    // then reused rather than destroyed when the row fills in: same node, new content, focus
+    // never moves and nothing has to be recovered. The key goes back to the item identity once
+    // the ring can no longer be on that card, where tearing the node down costs nothing.
+    //
+    // Read from the item id rather than a loading flag: a lazily loaded catalog composes its
+    // row before loading starts and would never see the flag go up. Paginating never arms it,
+    // the first item is a real one by then.
+    val rowStableKey = remember(catalogRow) { catalogRow.stableKey() }
+    val firstCardKey = remember(rowStableKey) { rowStableKey + "__first" }
+    val firstIsPlaceholder = catalogRow.items.firstOrNull()?.id?.startsWith("__placeholder_") == true
+    val pinFirstCard = remember { mutableStateOf(firstIsPlaceholder) }
+    val pinSpent = remember { mutableStateOf(false) }
+    if (firstIsPlaceholder && !pinSpent.value) pinFirstCard.value = true
+
     fun rowItemFocusKey(index: Int, item: MetaPreview): String {
+        if (index == 0 && pinFirstCard.value) return firstCardKey
         return rowItemKeys.getOrElse(index) { catalogRow.stableItemKey(item) }
     }
 
@@ -141,6 +163,13 @@ fun CatalogRowSection(
 
     val blockingFocusExit = remember { mutableStateOf(false) }
     val rowHasFocusRef = remember { mutableStateOf(false) }
+    // Released as soon as the ring can no longer be on the first card.
+    if (pinFirstCard.value && !firstIsPlaceholder &&
+        (!rowHasFocusRef.value || lastFocusedItemIndex.intValue > 0)
+    ) {
+        pinFirstCard.value = false
+        pinSpent.value = true
+    }
     val firstItemId = catalogRow.items.firstOrNull()?.id
     val wasPlaceholderRef = remember { mutableStateOf(firstItemId?.startsWith("__placeholder_") == true) }
     val isNowReal = firstItemId?.startsWith("__placeholder_") != true

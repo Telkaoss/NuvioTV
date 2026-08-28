@@ -488,6 +488,34 @@ internal fun ModernRowSection(
 
     // Blocks vertical focus exit during placeholder→data transition.
     val blockingFocusExit = remember { mutableStateOf(false) }
+
+    // Item keys carry item identity, so the placeholder the ring sits on does not survive real
+    // data arriving: its key changes and Compose tears the focused node down, which drops focus
+    // and leaves a bringIntoView firing from a node that no longer exists.
+    //
+    // Give the first card a positional key for as long as the ring can be on it. The node is
+    // then reused rather than destroyed when the row fills in: same node, new content, focus
+    // never moves and nothing has to be recovered. The key goes back to the item identity once
+    // focus has left the row, where tearing the node down costs nothing.
+    val firstCardKey = remember(row.key) { "${row.key}__first" }
+    // Armed while the row actually shows a placeholder, read from the item id rather than a
+    // loading flag: a lazily loaded catalog can compose its row before loading starts, and
+    // would never see the flag go up. Paginating never arms it, since by then the first item
+    // is a real one. Armed once and never again, so the key of a live card is never changed.
+    val firstIsPlaceholder = (row.items.list.firstOrNull()?.payload as? ModernPayload.Catalog)
+        ?.itemId?.startsWith("__placeholder_") == true
+    val pinFirstCard = remember { mutableStateOf(firstIsPlaceholder) }
+    val pinSpent = remember { mutableStateOf(false) }
+    if (firstIsPlaceholder && !pinSpent.value) pinFirstCard.value = true
+    // Released as soon as the ring can no longer be on that card: focus has left the row, or it
+    // has moved to another card within it. Swapping the node then costs nothing, and the card
+    // goes back to being keyed by the item it shows like every other one.
+    if (pinFirstCard.value && !firstIsPlaceholder &&
+        (!isActiveRow() || rowFocusedIndex.value != 0)
+    ) {
+        pinFirstCard.value = false
+        pinSpent.value = true
+    }
     Column(
         modifier = Modifier.then(
             if (blockingFocusExit.value) {
@@ -878,7 +906,7 @@ internal fun ModernRowSection(
             ) {
                 itemsIndexed(
                     items = row.items.list,
-                    key = { _, item -> item.key },
+                    key = { index, item -> if (index == 0 && pinFirstCard.value) firstCardKey else item.key },
                     contentType = { _, item ->
                         when (val payload = item.payload) {
                             is ModernPayload.ContinueWatching -> "modern_cw_card"
