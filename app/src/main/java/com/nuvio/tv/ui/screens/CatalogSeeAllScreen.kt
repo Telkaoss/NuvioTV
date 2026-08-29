@@ -63,6 +63,7 @@ import com.nuvio.tv.ui.screens.search.SearchViewModel
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.legacyKey
 import com.nuvio.tv.domain.model.stableItemKeys
+import com.nuvio.tv.domain.model.stableItemKeyAt
 import com.nuvio.tv.domain.model.stableKey
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.roundToInt
@@ -241,7 +242,7 @@ fun CatalogSeeAllScreen(
                 ) {
                     itemsIndexed(
                         items = catalogRow.items,
-                        key = { index, _ -> seeAllItemKeys.getOrElse(index) { "${catalogRow.stableKey()}_$index" } }
+                        key = { index, _ -> catalogRow.stableItemKeyAt(index) }
                     ) { index, item ->
                         val isWatched = if (isSearchMode) {
                             val isSeries = item.apiType.equals("series", ignoreCase = true) || item.apiType.equals("tv", ignoreCase = true)

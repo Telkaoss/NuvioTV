@@ -383,6 +383,14 @@ fun ModernHomeContent(
         } else null
         if (relocated != null && relocated != storedIdx) {
             focusedItemByRow[row.key] = relocated
+            // The hero reads activeItemIndex, which is a second record of where focus is and
+            // is only written from the focus event handler. Focus does not move when a refresh
+            // shifts the row, so nothing would correct it and the hero would describe whatever
+            // item took the old slot.
+            if (row.key == activeRowKey.value) {
+                focusHolder.activeItemIndex = relocated
+                activeItemIndex.intValue = relocated
+            }
         }
         previousItemKeysByRow[row.key] = currentIdentities
     }

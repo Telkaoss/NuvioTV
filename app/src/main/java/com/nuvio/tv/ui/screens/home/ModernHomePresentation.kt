@@ -9,6 +9,7 @@ import com.nuvio.tv.domain.model.CatalogRow
 import com.nuvio.tv.domain.model.Collection
 import com.nuvio.tv.domain.model.PLACEHOLDER_IMAGE_URL
 import com.nuvio.tv.domain.model.stableItemKey
+import com.nuvio.tv.domain.model.stableItemKeyAt
 import com.nuvio.tv.ui.util.asStable
 import java.util.Locale
 import kotlinx.coroutines.withContext
@@ -183,7 +184,7 @@ internal fun buildModernHomePresentation(
                                     cachedItem.showImdbRatings == input.showImdbRatings
                                 ) {
                                     cachedItem.carouselItem.let { cached ->
-                                        val stableItemKey = "${rowKey}_$itemIndex"
+                                        val stableItemKey = row.stableItemKeyAt(itemIndex)
                                         if (cached.key == stableItemKey) cached
                                         else cached.copy(key = stableItemKey)
                                     }
@@ -198,7 +199,7 @@ internal fun buildModernHomePresentation(
                                         showFullReleaseDate = input.showFullReleaseDate,
                                         showImdbRatings = input.showImdbRatings,
                                         previousCachedItem = cachedItem?.carouselItem
-                                    ).copy(key = "${rowKey}_$itemIndex")
+                                    ).copy(key = row.stableItemKeyAt(itemIndex))
                                     rowItemCache[cacheKey] = CachedCarouselItem(
                                         source = item,
                                         useLandscapePosters = input.useLandscapePosters,

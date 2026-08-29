@@ -65,6 +65,7 @@ import androidx.tv.material3.Text
 import com.nuvio.tv.domain.model.CatalogRow
 import com.nuvio.tv.domain.model.stableKey
 import com.nuvio.tv.domain.model.stableItemKeys
+import com.nuvio.tv.domain.model.stableItemKeyAt
 import com.nuvio.tv.domain.model.CardDepthSurface
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.stableItemKey
@@ -116,7 +117,7 @@ fun CatalogRowSection(
     val catalogRowKey = remember(catalogRow) { catalogRow.stableKey() }
     val rowItemIdentities = remember(catalogRow.items) { catalogRow.stableItemKeys() }
     fun rowItemFocusKey(index: Int, item: MetaPreview): String {
-        return "${catalogRowKey}_$index"
+        return catalogRow.stableItemKeyAt(index)
     }
 
     val seeAllCardShape = RoundedCornerShape(posterCardStyle.cornerRadius)

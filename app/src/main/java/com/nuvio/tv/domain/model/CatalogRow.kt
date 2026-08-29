@@ -21,7 +21,14 @@ data class CatalogRow(
     val skipStep: Int = 100,
     val nextSkip: Int = 0,
     val consecutiveDuplicatePages: Int = 0,
-    val extraArgs: Map<String, String> = emptyMap()
+    val extraArgs: Map<String, String> = emptyMap(),
+    /**
+     * Shifts the numbers item keys are built from, so a card keeps the same key for as long as
+     * it stays in the row. Items prepended by a refresh take the numbers below it rather than
+     * pushing everyone up, which would hand an existing key to a different item. Decremented by
+     * the number of prepended items, reset whenever the row is rebuilt from scratch.
+     */
+    val keyOffset: Int = 0
 ) {
     val apiType: String
         get() = type.toApiString(rawType)
@@ -39,6 +46,15 @@ fun CatalogRow.legacyKey(): String {
  * Identity-based item key, so a key follows its item when the list shifts instead of staying
  * pinned to a slot. [occurrence] disambiguates an id appearing twice in the same row.
  */
+/**
+ * Key for the item at [index], stable for the life of that item in the row: it does not change
+ * when a refresh prepends items, and it does not change when a placeholder becomes real, which
+ * is what keeps the focused node alive through both.
+ */
+fun CatalogRow.stableItemKeyAt(index: Int): String {
+    return "${stableKey()}_${keyOffset + index}"
+}
+
 fun CatalogRow.stableItemKey(item: MetaPreview, occurrence: Int = 0): String {
     val identity = "${stableKey()}_${item.apiType}:${item.id}"
     return if (occurrence == 0) identity else "$identity#$occurrence"
@@ -109,6 +125,9 @@ fun CatalogRow.mergeCatalogPage(
         hasMore = hasMore,
         currentPage = currentPage + 1,
         nextSkip = advancedSkip,
-        consecutiveDuplicatePages = duplicatePageCount
+        consecutiveDuplicatePages = duplicatePageCount,
+        // Carried over from the row being paginated, not taken from the incoming page: the
+        // existing items keep their place at the head, so they have to keep their key numbers.
+        keyOffset = keyOffset
     )
 }

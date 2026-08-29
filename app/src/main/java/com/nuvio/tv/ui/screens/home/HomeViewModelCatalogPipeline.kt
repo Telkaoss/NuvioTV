@@ -1137,10 +1137,11 @@ internal fun HomeViewModel.mergeRefreshedCatalogRow(
     val rowHasFocus = focusedRowKey != null && focusedRowKey == fresh.stableKey()
 
     if (isPrepend) {
-        // Nothing is removed, so the focused card only shifts along. That holds in the modern
-        // layout, which keeps the whole row; the others cut it at a fixed length, where the
-        // focused card can be pushed past the cut.
-        if (!requestedByUser && rowHasFocus) {
+        // Nothing is removed and the prepended items take the key numbers below the existing
+        // ones, so every card that was already there keeps its key and its node. The focused
+        // card only shifts along. That holds in the modern layout, which keeps the whole row;
+        // the others cut it at a fixed length, where the focused card can be pushed past the cut.
+        if (!requestedByUser && rowHasFocus && _uiState.value.homeLayout != HomeLayout.MODERN) {
             return true
         }
         val shiftedSkip = if (current.supportsSkip && current.nextSkip > 0) {
@@ -1148,7 +1149,16 @@ internal fun HomeViewModel.mergeRefreshedCatalogRow(
         } else {
             current.nextSkip
         }
-        replaceCatalogRow(key, current.copy(items = added + current.items, nextSkip = shiftedSkip))
+        replaceCatalogRow(
+            key,
+            current.copy(
+                items = added + current.items,
+                nextSkip = shiftedSkip,
+                // The new items take the numbers below the current ones, so nothing that is
+                // already on screen changes key.
+                keyOffset = current.keyOffset - added.size
+            )
+        )
         Log.d(
             HomeViewModel.TAG,
             "Home catalog refresh: +${added.size} item(s) catalogId=${fresh.catalogId}"
