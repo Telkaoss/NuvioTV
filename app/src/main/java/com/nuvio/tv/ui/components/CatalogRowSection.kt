@@ -161,8 +161,10 @@ fun CatalogRowSection(
         val previousKeys = previousRowItemKeys.value
         if (storedIndex >= 0 && previousKeys.isNotEmpty()) {
             val wanted = previousKeys.getOrNull(storedIndex)
-            val relocated = wanted?.let { rowItemIdentities.indexOf(it) } ?: -1
-            if (relocated != storedIndex) lastFocusedItemIndex.intValue = relocated
+            // Null, not -1: indexOf failing means the item left the row, and writing -1 into
+            // the remembered index makes the restorer fall back to the viewport edge.
+            val relocated = wanted?.let { rowItemIdentities.indexOf(it) }?.takeIf { it >= 0 }
+            if (relocated != null && relocated != storedIndex) lastFocusedItemIndex.intValue = relocated
         }
         previousRowItemKeys.value = rowItemIdentities
     }
