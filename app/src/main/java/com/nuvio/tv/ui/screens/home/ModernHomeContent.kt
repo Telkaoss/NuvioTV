@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -37,6 +38,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -372,6 +374,9 @@ fun ModernHomeContent(
     // guarded by an inequality, so it settles after one extra pass.
     focusedIdentityByRow.keys.retainAll(activeRowKeys)
     recordedIndexByRow.keys.retainAll(activeRowKeys)
+    // Window shifts a relocation asks for, applied after this composition: requestScrollToItem
+    // writes to a LazyListState, and the composition phase is not where that belongs.
+    val pendingRowScrolls = mutableListOf<Triple<LazyListState, Int, Int>>()
     carouselRows.list.forEach { row ->
         // Identity from the payload, not the composable key: the pin lends the first card a
         // positional key during the shimmer transition.
@@ -392,9 +397,30 @@ fun ModernHomeContent(
             is RowFocusRelocation.Relocated -> {
                 focusedItemByRow[row.key] = decision.index
                 recordedIndexByRow[row.key] = decision.index
+                // Shift the window by the same delta, offset kept. Without it the corrected
+                // index pulls the card to another place on screen and the row visibly slides.
+                // Read outside observation: this runs during composition, and subscribing to
+                // the row states or to a scroll position would recompose Home on every frame
+                // of every scroll.
+                Snapshot.withoutReadObservation {
+                    rowListStates[row.key]?.let { rowListState ->
+                        val target = rowListState.firstVisibleItemIndex +
+                            (decision.index - decision.from)
+                        pendingRowScrolls += Triple(
+                            rowListState,
+                            target.coerceAtLeast(0),
+                            rowListState.firstVisibleItemScrollOffset
+                        )
+                    }
+                }
             }
             is RowFocusRelocation.Readopted -> focusedIdentityByRow[row.key] = decision.identity
             RowFocusRelocation.Unchanged -> Unit
+        }
+    }
+    SideEffect {
+        pendingRowScrolls.forEach { (rowListState, index, offset) ->
+            rowListState.requestScrollToItem(index, offset)
         }
     }
 

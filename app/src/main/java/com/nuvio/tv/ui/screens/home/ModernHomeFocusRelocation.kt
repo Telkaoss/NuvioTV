@@ -8,7 +8,7 @@ internal sealed interface RowFocusRelocation {
     data class Noted(val index: Int, val identity: String?) : RowFocusRelocation
 
     /** The content moved under a ring that stayed put. Follow the remembered item. */
-    data class Relocated(val index: Int) : RowFocusRelocation
+    data class Relocated(val index: Int, val from: Int) : RowFocusRelocation
 
     /**
      * The remembered item is gone and the ring has not moved, so the user did not do this.
@@ -41,7 +41,7 @@ internal fun resolveRowFocusRelocation(
         ?.takeIf { it >= 0 }
     if (relocated != null) {
         return if (relocated == storedIndex) RowFocusRelocation.Unchanged
-        else RowFocusRelocation.Relocated(relocated)
+        else RowFocusRelocation.Relocated(relocated, storedIndex)
     }
 
     val identityHere = currentIdentities.getOrNull(storedIndex)
