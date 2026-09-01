@@ -198,9 +198,13 @@ fun ModernHomeContent(
     val loadMoreRequestedTotals = remember { mutableStateMapOf<String, Int>() }
 
     val focusedItemByRow = remember { mutableStateMapOf<String, Int>() }
-    // Item keys of each row as they were when its focused index was last recorded, so the index
-    // can be relocated when an in-place refresh shifts the row instead of pointing at a new item.
-    val previousItemKeysByRow = remember { mutableMapOf<String, List<String>>() }
+    // Identity of the focused item per row, resolved against the list as it is. The previous
+    // mechanism compared against a snapshot it overwrote on every composition pass.
+    val focusedIdentityByRow = remember { mutableMapOf<String, String>() }
+    val payloadIdentity: (ModernCarouselItem) -> String = { modernPayloadIdentity(it.payload) }
+    // The index this file last wrote itself. Comparing it with the live focused index tells a
+    // user move apart from a content shift.
+    val recordedIndexByRow = remember { mutableMapOf<String, Int>() }
     val stableFocusedItemByRow = remember { StableRef<MutableMap<String, Int>>(focusedItemByRow) }
     val stableRowListStates = remember { StableRef<MutableMap<String, LazyListState>>(rowListStates) }
     val stableLoadMoreRequestedTotals = remember { StableRef<MutableMap<String, Int>>(loadMoreRequestedTotals) }
@@ -363,28 +367,32 @@ fun ModernHomeContent(
     // During composition, not in an effect: an effect only lands after the new list is drawn,
     // so the row would briefly show focus on whatever sits at the old index. The write is
     // guarded by an inequality, so it settles after one extra pass.
-    previousItemKeysByRow.keys.retainAll(activeRowKeys)
+    focusedIdentityByRow.keys.retainAll(activeRowKeys)
+    recordedIndexByRow.keys.retainAll(activeRowKeys)
     carouselRows.list.forEach { row ->
-        // Use item identity (from payload) for relocation instead of composable key,
-        // because composable keys are index-based for shimmer→real stability.
-        val currentIdentities = row.items.list.map { item ->
-            when (val p = item.payload) {
-                is ModernPayload.Catalog -> "${p.itemType}:${p.itemId}"
-                is ModernPayload.CollectionFolder -> "folder:${p.folderId}"
-                is ModernPayload.ContinueWatching -> "cw:${p.item.hashCode()}"
-            }
-        }
+        // Identity from the payload, not the composable key: the pin lends the first card a
+        // positional key during the shimmer transition.
+        val currentIdentities = row.items.list.map(payloadIdentity)
         val storedIdx = focusedItemByRow[row.key]
-        val relocated = if (storedIdx != null) {
-            previousItemKeysByRow[row.key]
-                ?.getOrNull(storedIdx)
-                ?.let { currentIdentities.indexOf(it) }
-                ?.takeIf { it >= 0 }
-        } else null
-        if (relocated != null && relocated != storedIdx) {
-            focusedItemByRow[row.key] = relocated
+        val recordedIdx = recordedIndexByRow[row.key]
+        val decision = resolveRowFocusRelocation(
+            storedIndex = storedIdx,
+            recordedIndex = recordedIdx,
+            rememberedIdentity = focusedIdentityByRow[row.key],
+            currentIdentities = currentIdentities
+        )
+        when (decision) {
+            is RowFocusRelocation.Noted -> {
+                decision.identity?.let { focusedIdentityByRow[row.key] = it }
+                recordedIndexByRow[row.key] = decision.index
+            }
+            is RowFocusRelocation.Relocated -> {
+                focusedItemByRow[row.key] = decision.index
+                recordedIndexByRow[row.key] = decision.index
+            }
+            is RowFocusRelocation.Readopted -> focusedIdentityByRow[row.key] = decision.identity
+            RowFocusRelocation.Unchanged -> Unit
         }
-        previousItemKeysByRow[row.key] = currentIdentities
     }
 
     LaunchedEffect(carouselRows, focusState.hasSavedFocus) {
