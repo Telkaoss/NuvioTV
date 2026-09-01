@@ -423,7 +423,12 @@ internal fun ModernHomeRowsList(
                     rowFocusRequester = rowFocusRequesters.getOrPut(row.key) { FocusRequester() },
                     rowTitleBottom = 14.dp, // rowTitleBottom
                     defaultBringIntoViewSpec = defaultBringIntoViewSpec,
-                    focusStateCatalogRowScrollIndex = focusState.catalogRowScrollStates[row.key] ?: 0,
+                    // Resolved here rather than at restore time: the row is built with the content it
+                    // has now, and a refresh landing in between would already have moved the card.
+                    focusStateCatalogRowScrollIndex = focusState.catalogRowScrollAnchors[row.key]
+                        ?.let { anchor -> row.items.list.indexOfFirst { it.key == anchor } }
+                        ?.takeIf { it >= 0 }
+                        ?: focusState.catalogRowScrollStates[row.key] ?: 0,
                     focusStateCatalogRowScrollOffset = focusState.catalogRowScrollOffsets[row.key] ?: 0,
                     focusedItemByRow = focusedItemByRow,
                     rowListStates = rowListStates,

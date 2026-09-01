@@ -914,6 +914,7 @@ class HomeViewModel @Inject constructor(
         focusedItemKeyByRow: Map<String, String>,
         catalogRowScrollStates: Map<String, Int>,
         catalogRowScrollOffsets: Map<String, Int>,
+        catalogRowScrollAnchors: Map<String, String>,
         focusedRowIndex: Int = 0,
         focusedItemIndex: Int = 0
     ) {
@@ -928,6 +929,7 @@ class HomeViewModel @Inject constructor(
             focusedItemKeyByRow = focusedItemKeyByRow,
             catalogRowScrollStates = catalogRowScrollStates,
             catalogRowScrollOffsets = catalogRowScrollOffsets,
+            catalogRowScrollAnchors = catalogRowScrollAnchors,
             focusedRowIndex = focusedRowIndex,
             focusedItemIndex = focusedItemIndex,
             hasSavedFocus = true

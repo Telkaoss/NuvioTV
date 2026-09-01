@@ -48,6 +48,9 @@ data class HomeScreenFocusState(
     /** Pixel offset of the first visible card per row. Without it a row comes back aligned to
      *  a card edge, which is not where the pivot had left it, and focus lands one card short. */
     val catalogRowScrollOffsets: Map<String, Int> = emptyMap(),
+    /** Key of the card the window started on, per row. An index stops being the position it
+     *  described as soon as the row gains items; the card it pointed at does not. */
+    val catalogRowScrollAnchors: Map<String, String> = emptyMap(),
 
     /**
      * Optional stable key for the currently focused card in grid-style layouts.

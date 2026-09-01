@@ -120,7 +120,7 @@ fun ModernHomeContent(
     onNavigateToFolderDetail: (String, String) -> Unit = { _, _ -> },
     onItemFocus: (MetaPreview) -> Unit = {},
     onPreloadAdjacentItem: (MetaPreview) -> Unit = {},
-    onSaveFocusState: (Int, Int, String?, Map<String, String>, Map<String, Int>, Map<String, Int>, Int, Int) -> Unit,
+    onSaveFocusState: (Int, Int, String?, Map<String, String>, Map<String, Int>, Map<String, Int>, Map<String, String>, Int, Int) -> Unit,
     onFocusedRowKeyChanged: (String?) -> Unit = {},
     scrollToTopTrigger: Int = 0,
     onRequestLazyCatalogLoad: (String) -> Unit = {},
@@ -209,17 +209,20 @@ fun ModernHomeContent(
     val stableRowListStates = remember { StableRef<MutableMap<String, LazyListState>>(rowListStates) }
     val stableLoadMoreRequestedTotals = remember { StableRef<MutableMap<String, Int>>(loadMoreRequestedTotals) }
     if (focusedItemByRow.isEmpty() && focusState.hasSavedFocus) {
-        val savedRowKey = focusState.focusedRowKey
-        if (savedRowKey != null) {
-            val savedItemKey = focusState.focusedItemKeyByRow[savedRowKey]
-            if (savedItemKey != null) {
-                val row = carouselRows.list.firstOrNull { it.key == savedRowKey }
-                if (row != null) {
-                    val itemIndex = row.items.list.indexOfFirst { it.key == savedItemKey }
-                    if (itemIndex >= 0) {
-                        focusedItemByRow[savedRowKey] = itemIndex
-                    }
-                }
+        // Every row is saved, so every row is restored. Restoring only the focused row left the
+        // others pointing at 0, and the restorer then took whatever sat at the viewport edge.
+        val rowsByKey = carouselRows.list.associateBy { it.key }
+        focusState.focusedItemKeyByRow.forEach { (rowKey, savedItemKey) ->
+            if (savedItemKey.isBlank()) return@forEach
+            val row = rowsByKey[rowKey] ?: return@forEach
+            val itemIndex = row.items.list.indexOfFirst { it.key == savedItemKey }
+            if (itemIndex >= 0) {
+                focusedItemByRow[rowKey] = itemIndex
+                recordedIndexByRow[rowKey] = itemIndex
+                // Seed the identity too, or a prepend arriving right after the resume shifts
+                // the row out from under a relocation that has nothing to look for.
+                row.items.list.getOrNull(itemIndex)
+                    ?.let { focusedIdentityByRow[rowKey] = payloadIdentity(it) }
             }
         }
     }
@@ -626,6 +629,18 @@ fun ModernHomeContent(
                     rowState.key to (rowListStates[rowState.key]?.firstVisibleItemScrollOffset ?: 0)
                 }
 
+            // The card the window started on. The index beside it stops describing that
+            // position as soon as the row gains items in front; this card does not move.
+            val catalogRowScrollAnchors = latestCarouselRows
+                .mapNotNull { rowState ->
+                    val windowIndex = rowListStates[rowState.key]?.firstVisibleItemIndex
+                        ?: return@mapNotNull null
+                    val anchorKey = rowState.items.list.getOrNull(windowIndex)?.key
+                        ?: return@mapNotNull null
+                    rowState.key to anchorKey
+                }
+                .toMap()
+
             onSaveFocusState(
                 latestVerticalRowListState.firstVisibleItemIndex,
                 latestVerticalRowListState.firstVisibleItemScrollOffset,
@@ -633,6 +648,7 @@ fun ModernHomeContent(
                 focusedItemKeyByRow,
                 catalogRowScrollStates,
                 catalogRowScrollOffsets,
+                catalogRowScrollAnchors,
                 focusedRowIndex,
                 focusedItemIndex
             )
