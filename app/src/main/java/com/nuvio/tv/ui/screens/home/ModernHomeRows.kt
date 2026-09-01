@@ -429,6 +429,7 @@ internal fun ModernRowSection(
     rowTitleBottom: Dp,
     defaultBringIntoViewSpec: BringIntoViewSpec,
     focusStateCatalogRowScrollIndex: Int,
+    focusStateCatalogRowScrollOffset: Int,
     focusedItemByRow: StableRef<MutableMap<String, Int>>,
     rowListStates: StableRef<MutableMap<String, LazyListState>>,
     loadMoreRequestedTotals: StableRef<MutableMap<String, Int>>,
@@ -541,6 +542,7 @@ internal fun ModernRowSection(
         val rowListState = rowListStates.getOrPut(row.key) {
             LazyListState(
                 firstVisibleItemIndex = focusStateCatalogRowScrollIndex,
+                firstVisibleItemScrollOffset = focusStateCatalogRowScrollOffset,
                 prefetchStrategy = LazyListPrefetchStrategy(nestedPrefetchItemCount = NESTED_PREFETCH_COUNT)
             )
         }

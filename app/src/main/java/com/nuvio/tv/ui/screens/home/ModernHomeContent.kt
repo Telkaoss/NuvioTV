@@ -120,7 +120,7 @@ fun ModernHomeContent(
     onNavigateToFolderDetail: (String, String) -> Unit = { _, _ -> },
     onItemFocus: (MetaPreview) -> Unit = {},
     onPreloadAdjacentItem: (MetaPreview) -> Unit = {},
-    onSaveFocusState: (Int, Int, String?, Map<String, String>, Map<String, Int>, Int, Int) -> Unit,
+    onSaveFocusState: (Int, Int, String?, Map<String, String>, Map<String, Int>, Map<String, Int>, Int, Int) -> Unit,
     onFocusedRowKeyChanged: (String?) -> Unit = {},
     scrollToTopTrigger: Int = 0,
     onRequestLazyCatalogLoad: (String) -> Unit = {},
@@ -609,6 +609,14 @@ fun ModernHomeContent(
                         ?: (focusedItemByRow[rowState.key] ?: 0)
                     rowState.key to scrollIndex
                 }
+            // The pivot leaves a row part-way through a card, so the index alone is not the
+            // position it was left at. Restoring without this snaps the row back to a card edge.
+            // A row that was never composed has no measured offset, and 0 is the only one that
+            // can be stated; it pairs with whatever index the fallback above settled on.
+            val catalogRowScrollOffsets = latestCarouselRows
+                .associate { rowState ->
+                    rowState.key to (rowListStates[rowState.key]?.firstVisibleItemScrollOffset ?: 0)
+                }
 
             onSaveFocusState(
                 latestVerticalRowListState.firstVisibleItemIndex,
@@ -616,6 +624,7 @@ fun ModernHomeContent(
                 focusedRowKey,
                 focusedItemKeyByRow,
                 catalogRowScrollStates,
+                catalogRowScrollOffsets,
                 focusedRowIndex,
                 focusedItemIndex
             )

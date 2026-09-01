@@ -141,8 +141,8 @@ fun FolderDetailScreen(
             onLoadMoreCatalog = viewModel::loadMoreForCatalog,
             onSelectTab = viewModel::selectTab,
             onLoadMoreForSelectedTab = { viewModel.loadMoreItems(viewModel.uiState.value.selectedTabIndex) },
-            onSaveFocusState = { vi, vo, rk, ikm, m, ri, ii ->
-                viewModel.saveFollowLayoutFocusState(vi, vo, rk, ikm, m, ri, ii)
+            onSaveFocusState = { vi, vo, rk, ikm, m, mo, ri, ii ->
+                viewModel.saveFollowLayoutFocusState(vi, vo, rk, ikm, m, mo, ri, ii)
             },
             onItemFocus = viewModel::onItemFocused,
             onPreloadAdjacentItem = viewModel::preloadAdjacentItem,
@@ -189,8 +189,8 @@ fun FolderDetailScreen(
                         onNavigateToDetail = onNavigateToDetail,
                         isItemWatched = isItemWatched,
                         onLoadMoreCatalog = viewModel::loadMoreForCatalog,
-                        onSaveFocusState = { vi, vo, rk, ikm, m, ri, ii ->
-                            viewModel.saveRowsFocusState(vi, vo, rk, ikm, m, ri, ii)
+                        onSaveFocusState = { vi, vo, rk, ikm, m, mo, ri, ii ->
+                            viewModel.saveRowsFocusState(vi, vo, rk, ikm, m, mo, ri, ii)
                         },
                         onItemFocus = viewModel::onItemFocused,
                         onItemLongPress = { item, addonBaseUrl ->
@@ -560,7 +560,7 @@ private fun RowsContent(
     focusState: HomeScreenFocusState,
     onNavigateToDetail: (String, String, String) -> Unit,
     onLoadMoreCatalog: (String, String, String) -> Unit = { _, _, _ -> },
-    onSaveFocusState: (Int, Int, String?, Map<String, String>, Map<String, Int>, Int, Int) -> Unit,
+    onSaveFocusState: (Int, Int, String?, Map<String, String>, Map<String, Int>, Map<String, Int>, Int, Int) -> Unit,
     isItemWatched: (MetaPreview) -> Boolean = { false },
     onItemFocus: (MetaPreview) -> Unit = {},
     onItemLongPress: (MetaPreview, String) -> Unit = { _, _ -> },
@@ -633,6 +633,7 @@ private fun RowsContent(
                 focusedRowKey,
                 itemKeys,
                 rowStates.mapValues { it.value.firstVisibleItemIndex },
+                rowStates.mapValues { it.value.firstVisibleItemScrollOffset },
                 -1, // rowIndex
                 0   // itemIndex
             )
@@ -793,7 +794,8 @@ private fun RowsContent(
                     catalogRow != null -> {
                         val listState = rowStates.getOrPut(rowKey) {
                             LazyListState(
-                                firstVisibleItemIndex = focusState.catalogRowScrollStates[rowKey] ?: 0
+                                firstVisibleItemIndex = focusState.catalogRowScrollStates[rowKey] ?: 0,
+                                firstVisibleItemScrollOffset = focusState.catalogRowScrollOffsets[rowKey] ?: 0
                             )
                         }
                         val rowFocusRequester = rowFocusRequesters.getOrPut(rowKey) { FocusRequester() }
@@ -858,7 +860,7 @@ private fun FollowLayoutContent(
     onLoadMoreCatalog: (String, String, String) -> Unit = { _, _, _ -> },
     onSelectTab: (Int) -> Unit = {},
     onLoadMoreForSelectedTab: () -> Unit = {},
-    onSaveFocusState: (Int, Int, String?, Map<String, String>, Map<String, Int>, Int, Int) -> Unit,
+    onSaveFocusState: (Int, Int, String?, Map<String, String>, Map<String, Int>, Map<String, Int>, Int, Int) -> Unit,
     onItemFocus: (MetaPreview) -> Unit = {},
     onPreloadAdjacentItem: (MetaPreview) -> Unit = {},
     onCatalogItemLongPress: (MetaPreview, String) -> Unit = { _, _ -> },

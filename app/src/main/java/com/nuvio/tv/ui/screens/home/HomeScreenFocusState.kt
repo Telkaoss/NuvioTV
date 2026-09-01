@@ -45,6 +45,9 @@ data class HomeScreenFocusState(
      * Key format: "${addonId}_${type}_${catalogId}"
      */
     val catalogRowScrollStates: Map<String, Int> = emptyMap(),
+    /** Pixel offset of the first visible card per row. Without it a row comes back aligned to
+     *  a card edge, which is not where the pivot had left it, and focus lands one card short. */
+    val catalogRowScrollOffsets: Map<String, Int> = emptyMap(),
 
     /**
      * Optional stable key for the currently focused card in grid-style layouts.

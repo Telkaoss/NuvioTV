@@ -546,8 +546,8 @@ private fun ClassicHomeRoute(
         onItemFocus = { item ->
             viewModel.onItemFocus(item)
         },
-        onSaveFocusState = { vi, vo, rk, ikm, m, ri, ii ->
-            viewModel.saveFocusState(vi, vo, rk, ikm, m, ri, ii)
+        onSaveFocusState = { vi, vo, rk, ikm, m, mo, ri, ii ->
+            viewModel.saveFocusState(vi, vo, rk, ikm, m, mo, ri, ii)
             // Authoritative: this is the row that actually held focus when Home went away.
             viewModel.setLiveFocusedRowKey(rk)
         },
@@ -648,8 +648,8 @@ private fun ModernHomeRoute(
         }
     }
     val saveModernFocusState = remember(viewModel) {
-        { vi: Int, vo: Int, rk: String?, ikm: Map<String, String>, m: Map<String, Int>, ri: Int, ii: Int ->
-            viewModel.saveFocusState(vi, vo, rk, ikm, m, ri, ii)
+        { vi: Int, vo: Int, rk: String?, ikm: Map<String, String>, m: Map<String, Int>, mo: Map<String, Int>, ri: Int, ii: Int ->
+            viewModel.saveFocusState(vi, vo, rk, ikm, m, mo, ri, ii)
             // Authoritative: this is the row that actually held focus when Home went away.
             viewModel.setLiveFocusedRowKey(rk)
         }

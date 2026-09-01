@@ -104,7 +104,7 @@ fun ClassicHomeContent(
     onRequestTrailerPreview: (MetaPreview) -> Unit,
     onItemFocus: (MetaPreview) -> Unit = {},
     catalogSeeAllLabel: String? = null,
-    onSaveFocusState: (Int, Int, String?, Map<String, String>, Map<String, Int>, Int, Int) -> Unit,
+    onSaveFocusState: (Int, Int, String?, Map<String, String>, Map<String, Int>, Map<String, Int>, Int, Int) -> Unit,
     onFocusedRowKeyChanged: (String?) -> Unit = {},
     scrollToTopTrigger: Int = 0,
     onRequestLazyCatalogLoad: (String) -> Unit = {}
@@ -296,6 +296,8 @@ fun ClassicHomeContent(
                 currentFocusSnapshot.rowKey,
                 emptyMap(), // Classic doesn't use ID-based restoration for inner rows yet
                 focusState.catalogRowScrollStates + rowStates.mapValues { it.value.firstVisibleItemIndex },
+                // Same reason as modern: the index alone is not where the pivot left the row.
+                focusState.catalogRowScrollOffsets + rowStates.mapValues { it.value.firstVisibleItemScrollOffset },
                 currentFocusSnapshot.rowIndex,
                 currentFocusSnapshot.itemIndex
             )
@@ -783,7 +785,8 @@ fun ClassicHomeContent(
 
                     val listState = rowStates.getOrPut(catalogKey) {
                         LazyListState(
-                            firstVisibleItemIndex = focusState.catalogRowScrollStates[catalogKey] ?: 0
+                            firstVisibleItemIndex = focusState.catalogRowScrollStates[catalogKey] ?: 0,
+                            firstVisibleItemScrollOffset = focusState.catalogRowScrollOffsets[catalogKey] ?: 0
                         )
                     }
                     val rowFocusRequester = rowFocusRequesters.getOrPut(catalogKey) { FocusRequester() }
@@ -847,7 +850,8 @@ fun ClassicHomeContent(
                     }
                     val listState = rowStates.getOrPut(collectionKey) {
                         LazyListState(
-                            firstVisibleItemIndex = focusState.catalogRowScrollStates[collectionKey] ?: 0
+                            firstVisibleItemIndex = focusState.catalogRowScrollStates[collectionKey] ?: 0,
+                            firstVisibleItemScrollOffset = focusState.catalogRowScrollOffsets[collectionKey] ?: 0
                         )
                     }
 
