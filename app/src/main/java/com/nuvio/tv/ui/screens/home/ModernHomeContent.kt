@@ -397,6 +397,12 @@ fun ModernHomeContent(
             is RowFocusRelocation.Relocated -> {
                 focusedItemByRow[row.key] = decision.index
                 recordedIndexByRow[row.key] = decision.index
+                // The hero reads its own index, synced by an effect keyed on the row size, so
+                // it lands a frame late and spends it showing whatever took the old index.
+                if (row.key == activeRowKey.value) {
+                    focusHolder.activeItemIndex = decision.index
+                    activeItemIndex.intValue = decision.index
+                }
                 // Shift the window by the same delta, offset kept. Without it the corrected
                 // index pulls the card to another place on screen and the row visibly slides.
                 // Read outside observation: this runs during composition, and subscribing to
