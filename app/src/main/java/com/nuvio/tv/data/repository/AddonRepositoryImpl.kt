@@ -284,7 +284,9 @@ class AddonRepositoryImpl(
                     if (fresh != cached) {
                         emit(applyDisplayNames(fresh, userNames, enabledByUrl))
                     }
-                } else if (isCacheStale() && urls.isNotEmpty()) {
+                }
+                // Not an else: an addon that never answers stays a miss for good.
+                if (isCacheStale() && urls.isNotEmpty()) {
                     scheduleManifestRefresh(
                         urls.filter { url -> enabledByUrl[canonicalizeUrl(url)] ?: true }
                     )
