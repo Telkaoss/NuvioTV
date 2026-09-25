@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -38,6 +39,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -370,7 +372,10 @@ fun ModernHomeContent(
     }
 
     val currentItemIdentitiesByRow = carouselLookups.itemIdentitiesByRow.map
-    if (itemIdentitySnapshot.byRow !== currentItemIdentitiesByRow) {
+    // Issued after composition: requestScrollToItem writes to a LazyListState.
+    val pendingRowScrolls = mutableListOf<Pair<LazyListState, Int>>()
+    val identitiesChanged = itemIdentitySnapshot.byRow !== currentItemIdentitiesByRow
+    if (identitiesChanged) {
         currentItemIdentitiesByRow.forEach { (rowKey, currentIdentities) ->
             val storedIndex = focusedItemByRow[rowKey]
             val relocatedIndex = findRelocatedItemIndex(
@@ -386,9 +391,23 @@ fun ModernHomeContent(
                     focusHolder.activeItemIndex = relocatedIndex
                     activeItemIndex.intValue = relocatedIndex
                 }
+                // Compose only moves the window on the row's next measure: until then the
+                // relocated card has no requester and the restorer falls back to card 0.
+                // Read without observation, or Home would recompose on every scroll frame.
+                Snapshot.withoutReadObservation {
+                    val state = rowListStates[rowKey] ?: return@withoutReadObservation
+                    if (state.firstVisibleItemIndex != relocatedIndex) {
+                        pendingRowScrolls += state to relocatedIndex
+                    }
+                }
             }
         }
-        itemIdentitySnapshot.byRow = currentItemIdentitiesByRow
+    }
+    if (identitiesChanged) {
+        SideEffect {
+            pendingRowScrolls.forEach { (state, index) -> state.requestScrollToItem(index) }
+            itemIdentitySnapshot.byRow = currentItemIdentitiesByRow
+        }
     }
 
     LaunchedEffect(carouselRows, focusState.hasSavedFocus) {
