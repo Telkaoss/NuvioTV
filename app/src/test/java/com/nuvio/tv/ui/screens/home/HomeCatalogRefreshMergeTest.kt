@@ -62,6 +62,31 @@ class HomeCatalogRefreshMergeTest {
     }
 
     @Test
+    fun `more than half of page 1 in front is a reshuffle, not new titles`() {
+        assertEquals(false, CatalogRefreshChange.Prepend(10, emptySet()).isReshuffle(pageSize = 20))
+        assertEquals(true, CatalogRefreshChange.Prepend(11, emptySet()).isReshuffle(pageSize = 20))
+        assertEquals(true, CatalogRefreshChange.Prepend(13, setOf("movie:a")).isReshuffle(pageSize = 20))
+    }
+
+    @Test
+    fun `a series moved to the front counts as new, a moved film does not`() {
+        assertEquals(true, countsAsNew(ContentType.MOVIE, moved = false))
+        assertEquals(true, countsAsNew(ContentType.SERIES, moved = true))
+        assertEquals(false, countsAsNew(ContentType.MOVIE, moved = true))
+    }
+
+    @Test
+    fun `only titles ahead of the former first card arrived in front`() {
+        val current = listOf("a", "b", "c", "d", "e")
+
+        assertEquals(2, arrivedInFrontCount(current, listOf("n0", "e", "a", "b", "c")))
+        // A swap, or an entry, in the middle of the row.
+        assertEquals(0, arrivedInFrontCount(current, listOf("a", "b", "d", "c", "e")))
+        assertEquals(0, arrivedInFrontCount(current, listOf("a", "b", "n0", "c", "d")))
+        assertEquals(0, arrivedInFrontCount(emptyList(), listOf("n0")))
+    }
+
+    @Test
     fun `an empty page 1 leaves the row unchanged`() {
         assertEquals(CatalogRefreshChange.Unchanged, classifyCatalogRefresh(loaded, emptyList()))
     }

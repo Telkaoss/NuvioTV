@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.R
 import com.nuvio.tv.core.network.NetworkResult
+import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
 import com.nuvio.tv.domain.model.CatalogRow
@@ -1117,12 +1118,23 @@ internal fun HomeViewModel.applyPendingRefreshMerges() {
     }
 }
 
+// A series back in front most likely has a new episode; a film only changed place.
+internal fun countsAsNew(type: ContentType, moved: Boolean): Boolean = !moved || type != ContentType.MOVIE
+
+// Titles now ahead of the row's former first card. One that entered further down, or a swap in
+// the middle of the row, puts nothing in front.
+internal fun arrivedInFrontCount(currentIds: List<String>, freshIds: List<String>): Int =
+    currentIds.firstOrNull()?.let(freshIds::indexOf)?.coerceAtLeast(0) ?: 0
+
 internal sealed interface CatalogRefreshChange {
     object Unchanged : CatalogRefreshChange
 
     /** The first [headCount] items go in front: new ones, or [moved] up from further down the row. */
     data class Prepend(val headCount: Int, val moved: Set<String> = emptySet()) : CatalogRefreshChange {
         val addedCount: Int get() = headCount - moved.size
+
+        // More than half of page 1 in front is a catalog sorted again, not titles added to it.
+        fun isReshuffle(pageSize: Int): Boolean = headCount * 2 > pageSize
     }
 
     object Restructure : CatalogRefreshChange
@@ -1266,7 +1278,15 @@ internal fun HomeViewModel.mergeRefreshedCatalogRow(
                 nextSkip = shiftedSkip
             )
         )
-        addNewItems(fresh.stableKey(), applied.filter { identity(head[it]) !in change.moved }.map { headKeys[it] })
+        if (isModern && !change.isReshuffle(fresh.items.size)) {
+            val arrivedInFront = arrivedInFrontCount(currentIds, freshIds)
+            addNewItems(
+                fresh.stableKey(),
+                applied.filter {
+                    it < arrivedInFront && countsAsNew(head[it].type, identity(head[it]) in change.moved)
+                }.map { headKeys[it] }
+            )
+        }
         Log.d(
             HomeViewModel.TAG,
             "Home catalog refresh: +${change.addedCount} item(s), ${moved.size} moved to front catalogId=${fresh.catalogId}"
