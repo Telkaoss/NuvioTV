@@ -145,6 +145,10 @@ internal fun ModernHomeRowsList(
     onFocusedHeroMediaNonceChange: (Int) -> Unit,
     onExpansionInteractionNonceChange: (Int) -> Unit,
     blockLeftOnFirstExpandedItem: Boolean = false,
+    newItemCountByRow: StableMap<String, Int> = StableMap(),
+    newItemsIndicatorStyle: com.nuvio.tv.domain.model.NewItemsIndicatorStyle = com.nuvio.tv.domain.model.NewItemsIndicatorStyle.OFF,
+    newItemsIndicatorAnimated: Boolean = false,
+    newItemsIndicatorThemeColor: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     // Unwrap StableRef wrappers for internal use (not passed to child composables)
@@ -427,6 +431,10 @@ internal fun ModernHomeRowsList(
                     isActiveRow = isActiveRowLambda,
                     rowFocusRequester = rowFocusRequesters.getOrPut(row.key) { FocusRequester() },
                     rowTitleBottom = 14.dp, // rowTitleBottom
+                    newItemCount = newItemCountByRow[row.key] ?: 0,
+                    newItemsIndicatorStyle = newItemsIndicatorStyle,
+                    newItemsIndicatorAnimated = newItemsIndicatorAnimated,
+                    newItemsIndicatorThemeColor = newItemsIndicatorThemeColor,
                     defaultBringIntoViewSpec = defaultBringIntoViewSpec,
                     focusedItemByRow = focusedItemByRow,
                     rowListStates = rowListStates,

@@ -136,6 +136,10 @@ fun ModernHomeContent(
     lastEnrichedPreview: MetaPreview? = null,
     enrichedPreviews: Map<String, MetaPreview> = emptyMap(),
     failedEnrichmentIds: Set<String> = emptySet(),
+    newItemCountByRow: Map<String, Int> = emptyMap(),
+    newItemsIndicatorStyle: com.nuvio.tv.domain.model.NewItemsIndicatorStyle = com.nuvio.tv.domain.model.NewItemsIndicatorStyle.OFF,
+    newItemsIndicatorAnimated: Boolean = false,
+    newItemsIndicatorThemeColor: Boolean = false,
     trailerPreviewUrls: Map<String, String> = emptyMap(),
     trailerPreviewAudioUrls: Map<String, String> = emptyMap(),
     onNavigateToDetail: (String, String, String) -> Unit,
@@ -235,6 +239,7 @@ fun ModernHomeContent(
     val rowListsSnapshot = remember { RowListsSnapshot() }
     val latestRowByKey = rememberUpdatedState(rowByKey)
     val latestOnFocusedItemKeyChanged = rememberUpdatedState(onFocusedItemKeyChanged)
+    val stableNewItemCountByRow = remember(newItemCountByRow) { newItemCountByRow.asStable() }
     val recordFocusedCard = remember {
         { rowKey: String, index: Int ->
             val key = latestRowByKey.value[rowKey]?.items?.list?.getOrNull(index)?.key
@@ -1260,6 +1265,10 @@ fun ModernHomeContent(
                 onFocusedHeroMediaNonceChange = onFocusedHeroMediaNonceChangeLambda,
                 onExpansionInteractionNonceChange = onExpansionInteractionNonceChangeLambda,
                 blockLeftOnFirstExpandedItem = blockLeftOnFirstExpandedItem,
+                newItemCountByRow = stableNewItemCountByRow,
+                newItemsIndicatorStyle = newItemsIndicatorStyle,
+                newItemsIndicatorAnimated = newItemsIndicatorAnimated,
+                newItemsIndicatorThemeColor = newItemsIndicatorThemeColor,
                 isVerticalRowsScrollingState = isVerticalRowsScrollingState,
                 modifier = Modifier
                     .align(Alignment.BottomStart)

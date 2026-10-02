@@ -648,6 +648,10 @@ private fun ModernHomeRoute(
     val lastEnrichedPreview by viewModel.lastEnrichedPreview.collectAsStateWithLifecycle()
     val enrichedPreviews by viewModel.enrichedPreviews.collectAsStateWithLifecycle()
     val failedEnrichmentIds by viewModel.failedEnrichmentIds.collectAsStateWithLifecycle()
+    val newItemCountByRow by viewModel.newItemCountByRow.collectAsStateWithLifecycle()
+    val newItemsIndicatorStyle by viewModel.newItemsIndicatorStyle.collectAsStateWithLifecycle()
+    val newItemsIndicatorAnimated by viewModel.newItemsIndicatorAnimated.collectAsStateWithLifecycle()
+    val newItemsIndicatorThemeColor by viewModel.newItemsIndicatorThemeColor.collectAsStateWithLifecycle()
     val requestTrailerPreview = remember(viewModel) {
         { itemId: String, title: String, releaseInfo: String?, apiType: String ->
             viewModel.requestTrailerPreview(itemId, title, releaseInfo, apiType)
@@ -684,6 +688,10 @@ private fun ModernHomeRoute(
         lastEnrichedPreview = lastEnrichedPreview,
         enrichedPreviews = enrichedPreviews,
         failedEnrichmentIds = failedEnrichmentIds,
+        newItemCountByRow = newItemCountByRow,
+        newItemsIndicatorStyle = newItemsIndicatorStyle,
+        newItemsIndicatorAnimated = newItemsIndicatorAnimated,
+        newItemsIndicatorThemeColor = newItemsIndicatorThemeColor,
         trailerPreviewUrls = viewModel.trailerPreviewUrls,
         trailerPreviewAudioUrls = viewModel.trailerPreviewAudioUrls,
         onNavigateToDetail = onNavigateToDetail,

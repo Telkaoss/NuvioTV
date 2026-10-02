@@ -54,6 +54,9 @@ data class LayoutSettingsUiState(
     val lastNonOffDiscoverLocation: DiscoverLocation = DiscoverLocation.IN_SEARCH,
     val posterLabelsEnabled: Boolean = true,
     val catalogAddonNameEnabled: Boolean = true,
+    val newItemsIndicatorStyle: com.nuvio.tv.domain.model.NewItemsIndicatorStyle = com.nuvio.tv.domain.model.NewItemsIndicatorStyle.BADGE,
+    val newItemsIndicatorAnimated: Boolean = false,
+    val newItemsIndicatorThemeColor: Boolean = false,
     val catalogTypeSuffixEnabled: Boolean = true,
     val classicFocusGradientEnabled: Boolean = false,
     val focusedPosterBackdropExpandEnabled: Boolean = true,
@@ -108,6 +111,9 @@ sealed class LayoutSettingsEvent {
     data class SetDiscoverLocation(val location: DiscoverLocation) : LayoutSettingsEvent()
     data class SetPosterLabelsEnabled(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetCatalogAddonNameEnabled(val enabled: Boolean) : LayoutSettingsEvent()
+    data class SetNewItemsIndicatorStyle(val style: com.nuvio.tv.domain.model.NewItemsIndicatorStyle) : LayoutSettingsEvent()
+    data class SetNewItemsIndicatorAnimated(val enabled: Boolean) : LayoutSettingsEvent()
+    data class SetNewItemsIndicatorThemeColor(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetCatalogTypeSuffixEnabled(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetClassicFocusGradientEnabled(val enabled: Boolean) : LayoutSettingsEvent()
     data class SetFocusedPosterBackdropExpandEnabled(val enabled: Boolean) : LayoutSettingsEvent()
@@ -254,6 +260,21 @@ class LayoutSettingsViewModel @Inject constructor(
         viewModelScope.launch {
             layoutPreferenceDataStore.catalogAddonNameEnabled.distinctUntilChanged().collectLatest { enabled ->
                 updateUiStateIfChanged { it.copy(catalogAddonNameEnabled = enabled) }
+            }
+        }
+        viewModelScope.launch {
+            layoutPreferenceDataStore.newItemsIndicatorStyle.distinctUntilChanged().collectLatest { style ->
+                updateUiStateIfChanged { it.copy(newItemsIndicatorStyle = style) }
+            }
+        }
+        viewModelScope.launch {
+            layoutPreferenceDataStore.newItemsIndicatorAnimated.distinctUntilChanged().collectLatest { enabled ->
+                updateUiStateIfChanged { it.copy(newItemsIndicatorAnimated = enabled) }
+            }
+        }
+        viewModelScope.launch {
+            layoutPreferenceDataStore.newItemsIndicatorThemeColor.distinctUntilChanged().collectLatest { enabled ->
+                updateUiStateIfChanged { it.copy(newItemsIndicatorThemeColor = enabled) }
             }
         }
         viewModelScope.launch {
@@ -444,6 +465,15 @@ class LayoutSettingsViewModel @Inject constructor(
             is LayoutSettingsEvent.SetDiscoverLocation -> setDiscoverLocation(event.location)
             is LayoutSettingsEvent.SetPosterLabelsEnabled -> setPosterLabelsEnabled(event.enabled)
             is LayoutSettingsEvent.SetCatalogAddonNameEnabled -> setCatalogAddonNameEnabled(event.enabled)
+            is LayoutSettingsEvent.SetNewItemsIndicatorStyle -> viewModelScope.launch {
+                layoutPreferenceDataStore.setNewItemsIndicatorStyle(event.style)
+            }
+            is LayoutSettingsEvent.SetNewItemsIndicatorAnimated -> viewModelScope.launch {
+                layoutPreferenceDataStore.setNewItemsIndicatorAnimated(event.enabled)
+            }
+            is LayoutSettingsEvent.SetNewItemsIndicatorThemeColor -> viewModelScope.launch {
+                layoutPreferenceDataStore.setNewItemsIndicatorThemeColor(event.enabled)
+            }
             is LayoutSettingsEvent.SetCatalogTypeSuffixEnabled -> setCatalogTypeSuffixEnabled(event.enabled)
             is LayoutSettingsEvent.SetClassicFocusGradientEnabled -> setClassicFocusGradientEnabled(event.enabled)
             is LayoutSettingsEvent.SetFocusedPosterBackdropExpandEnabled -> setFocusedPosterBackdropExpandEnabled(event.enabled)

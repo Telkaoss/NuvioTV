@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.fillMaxSize
@@ -441,6 +442,10 @@ internal fun ModernRowSection(
     rowFocusRequester: FocusRequester,
     isVerticalRowsScrollingState: State<Boolean>,
     rowTitleBottom: Dp,
+    newItemCount: Int = 0,
+    newItemsIndicatorStyle: com.nuvio.tv.domain.model.NewItemsIndicatorStyle = com.nuvio.tv.domain.model.NewItemsIndicatorStyle.OFF,
+    newItemsIndicatorAnimated: Boolean = false,
+    newItemsIndicatorThemeColor: Boolean = false,
     defaultBringIntoViewSpec: BringIntoViewSpec,
     focusedItemByRow: StableRef<MutableMap<String, Int>>,
     rowListStates: StableRef<MutableMap<String, LazyListState>>,
@@ -559,12 +564,32 @@ internal fun ModernRowSection(
         val textModifier = remember(rowTitleBottom) {
             Modifier.padding(start = 52.dp, bottom = rowTitleBottom)
         }
-        Text(
-            text = rowTitle,
-            style = rowTitleStyle.copy(textDirection = rowTitle.contentTextDirection()),
-            color = textColor,
-            modifier = textModifier
-        )
+        if (newItemCount > 0 && newItemsIndicatorStyle != com.nuvio.tv.domain.model.NewItemsIndicatorStyle.OFF) {
+            Row(
+                modifier = textModifier,
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
+            ) {
+                Text(
+                    text = rowTitle,
+                    style = rowTitleStyle.copy(textDirection = rowTitle.contentTextDirection()),
+                    color = textColor
+                )
+                ModernHomeNewItemsIndicator(
+                    count = newItemCount,
+                    style = newItemsIndicatorStyle,
+                    animated = newItemsIndicatorAnimated,
+                    useThemeColor = newItemsIndicatorThemeColor
+                )
+            }
+        } else {
+            Text(
+                text = rowTitle,
+                style = rowTitleStyle.copy(textDirection = rowTitle.contentTextDirection()),
+                color = textColor,
+                modifier = textModifier
+            )
+        }
 
         val rowListState = rowListStates.getOrPut(row.key) {
             // Read unobserved: only the row's first composition needs it.

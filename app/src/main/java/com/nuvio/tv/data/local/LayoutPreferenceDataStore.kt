@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.nuvio.tv.domain.model.NewItemsIndicatorStyle
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -81,6 +82,9 @@ class LayoutPreferenceDataStore @Inject constructor(
     private val heroSectionEnabledKey = booleanPreferencesKey("hero_section_enabled")
     private val posterLabelsEnabledKey = booleanPreferencesKey("poster_labels_enabled")
     private val catalogAddonNameEnabledKey = booleanPreferencesKey("catalog_addon_name_enabled")
+    private val newItemsIndicatorStyleKey = stringPreferencesKey("new_items_indicator_style")
+    private val newItemsIndicatorAnimatedKey = booleanPreferencesKey("new_items_indicator_animated")
+    private val newItemsIndicatorThemeColorKey = booleanPreferencesKey("new_items_indicator_theme_color")
     private val catalogTypeSuffixEnabledKey = booleanPreferencesKey("catalog_type_suffix_enabled")
     private val classicFocusGradientEnabledKey = booleanPreferencesKey("classic_focus_gradient_enabled")
     private val focusedPosterBackdropExpandEnabledKey = booleanPreferencesKey("focused_poster_backdrop_expand_enabled")
@@ -269,6 +273,18 @@ class LayoutPreferenceDataStore @Inject constructor(
 
     val catalogAddonNameEnabled: Flow<Boolean> = profileFlow { prefs ->
         prefs[catalogAddonNameEnabledKey] ?: true
+    }
+
+    val newItemsIndicatorStyle: Flow<NewItemsIndicatorStyle> = profileFlow { prefs ->
+        NewItemsIndicatorStyle.fromStorage(prefs[newItemsIndicatorStyleKey])
+    }
+
+    val newItemsIndicatorAnimated: Flow<Boolean> = profileFlow { prefs ->
+        prefs[newItemsIndicatorAnimatedKey] ?: false
+    }
+
+    val newItemsIndicatorThemeColor: Flow<Boolean> = profileFlow { prefs ->
+        prefs[newItemsIndicatorThemeColorKey] ?: false
     }
 
     val catalogTypeSuffixEnabled: Flow<Boolean> = profileFlow { prefs ->
@@ -613,6 +629,24 @@ class LayoutPreferenceDataStore @Inject constructor(
     suspend fun setCatalogAddonNameEnabled(enabled: Boolean) {
         store().edit { prefs ->
             prefs[catalogAddonNameEnabledKey] = enabled
+        }
+    }
+
+    suspend fun setNewItemsIndicatorStyle(style: NewItemsIndicatorStyle) {
+        store().edit { prefs ->
+            prefs[newItemsIndicatorStyleKey] = style.name
+        }
+    }
+
+    suspend fun setNewItemsIndicatorAnimated(enabled: Boolean) {
+        store().edit { prefs ->
+            prefs[newItemsIndicatorAnimatedKey] = enabled
+        }
+    }
+
+    suspend fun setNewItemsIndicatorThemeColor(enabled: Boolean) {
+        store().edit { prefs ->
+            prefs[newItemsIndicatorThemeColorKey] = enabled
         }
     }
 

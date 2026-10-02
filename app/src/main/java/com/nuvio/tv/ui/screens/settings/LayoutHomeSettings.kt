@@ -155,6 +155,36 @@ internal fun LayoutHomeContentSection(
             onToggle = { onEvent(LayoutSettingsEvent.SetCatalogAddonNameEnabled(!uiState.catalogAddonNameEnabled)) }
         )
     }
+    if (uiState.selectedLayout == HomeLayout.MODERN) {
+        val indicatorStyle = uiState.newItemsIndicatorStyle
+        SettingsActionRow(
+            title = stringResource(R.string.layout_new_items_indicator),
+            subtitle = stringResource(R.string.layout_new_items_indicator_sub),
+            value = stringResource(
+                when (indicatorStyle) {
+                    com.nuvio.tv.domain.model.NewItemsIndicatorStyle.OFF -> R.string.layout_new_items_indicator_off
+                    com.nuvio.tv.domain.model.NewItemsIndicatorStyle.BADGE -> R.string.layout_new_items_indicator_badge
+                    com.nuvio.tv.domain.model.NewItemsIndicatorStyle.DOT -> R.string.layout_new_items_indicator_dot
+                    com.nuvio.tv.domain.model.NewItemsIndicatorStyle.RING -> R.string.layout_new_items_indicator_ring
+                }
+            ),
+            onClick = { onEvent(LayoutSettingsEvent.SetNewItemsIndicatorStyle(indicatorStyle.next())) }
+        )
+        if (indicatorStyle != com.nuvio.tv.domain.model.NewItemsIndicatorStyle.OFF) {
+            SettingsToggleRow(
+                title = stringResource(R.string.layout_new_items_indicator_theme_color),
+                subtitle = stringResource(R.string.layout_new_items_indicator_theme_color_sub),
+                checked = uiState.newItemsIndicatorThemeColor,
+                onToggle = { onEvent(LayoutSettingsEvent.SetNewItemsIndicatorThemeColor(!uiState.newItemsIndicatorThemeColor)) }
+            )
+            SettingsToggleRow(
+                title = stringResource(R.string.layout_new_items_indicator_animated),
+                subtitle = stringResource(R.string.layout_new_items_indicator_animated_sub),
+                checked = uiState.newItemsIndicatorAnimated,
+                onToggle = { onEvent(LayoutSettingsEvent.SetNewItemsIndicatorAnimated(!uiState.newItemsIndicatorAnimated)) }
+            )
+        }
+    }
     SettingsToggleRow(
         title = stringResource(R.string.layout_catalog_type),
         subtitle = stringResource(R.string.layout_catalog_type_sub),

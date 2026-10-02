@@ -44,6 +44,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
@@ -827,6 +828,44 @@ class HomeViewModel @Inject constructor(
     fun setLiveFocusedItemKey(rowKey: String, itemKey: String?) {
         if (itemKey != null) liveFocusedItemKeyByRow[rowKey] = itemKey
         else liveFocusedItemKeyByRow.remove(rowKey)
+        // By key, not index: the row on screen can still be the list from before the refresh.
+        if (itemKey != null && newItemKeysByRow[rowKey]?.contains(itemKey) == true) clearNewItems(rowKey)
+    }
+
+    val newItemsIndicatorStyle: StateFlow<com.nuvio.tv.domain.model.NewItemsIndicatorStyle> =
+        layoutPreferenceDataStore.newItemsIndicatorStyle.stateIn(
+            viewModelScope,
+            kotlinx.coroutines.flow.SharingStarted.Eagerly,
+            com.nuvio.tv.domain.model.NewItemsIndicatorStyle.BADGE
+        )
+    val newItemsIndicatorThemeColor: StateFlow<Boolean> =
+        layoutPreferenceDataStore.newItemsIndicatorThemeColor.stateIn(
+            viewModelScope,
+            kotlinx.coroutines.flow.SharingStarted.Eagerly,
+            false
+        )
+    val newItemsIndicatorAnimated: StateFlow<Boolean> =
+        layoutPreferenceDataStore.newItemsIndicatorAnimated.stateIn(
+            viewModelScope,
+            kotlinx.coroutines.flow.SharingStarted.Eagerly,
+            false
+        )
+
+    /** New items in front of each row that the user has not reached yet. */
+    private val _newItemCountByRow = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val newItemCountByRow: StateFlow<Map<String, Int>> = _newItemCountByRow.asStateFlow()
+
+    private val newItemKeysByRow = ConcurrentHashMap<String, Set<String>>()
+
+    internal fun addNewItems(rowKey: String, itemKeys: List<String>) {
+        if (itemKeys.isEmpty()) return
+        val keys = newItemKeysByRow.merge(rowKey, itemKeys.toSet()) { old, added -> old + added }.orEmpty()
+        _newItemCountByRow.update { it + (rowKey to keys.size) }
+    }
+
+    fun clearNewItems(rowKey: String) {
+        newItemKeysByRow.remove(rowKey)
+        _newItemCountByRow.update { if (rowKey in it) it - rowKey else it }
     }
 
     /** Called by the Home content when the focused row changes. */

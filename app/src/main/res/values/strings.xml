@@ -96,6 +96,18 @@
     <string name="web_import_success">Imported {count} collection(s). Review and hit Save Changes to apply.</string>
     <string name="web_import_invalid_json">Invalid JSON</string>
 
+    <string name="home_row_new_items">+%1$d NEW</string>
+    <string name="home_row_new_items_short">+%1$d</string>
+    <string name="layout_new_items_indicator">New items indicator</string>
+    <string name="layout_new_items_indicator_sub">Shown next to a row title when a refresh adds titles in front of it.</string>
+    <string name="layout_new_items_indicator_off">Off</string>
+    <string name="layout_new_items_indicator_badge">Badge</string>
+    <string name="layout_new_items_indicator_dot">Dot</string>
+    <string name="layout_new_items_indicator_ring">Ring</string>
+    <string name="layout_new_items_indicator_theme_color">Use the theme color</string>
+    <string name="layout_new_items_indicator_theme_color_sub">Off keeps the indicator amber so it stands out from the theme.</string>
+    <string name="layout_new_items_indicator_animated">Animate the indicator</string>
+    <string name="layout_new_items_indicator_animated_sub">Turn off on slower devices.</string>
     <string name="home_no_addons">No addons installed. Add one to get started.</string>
     <string name="home_no_catalog_addons">No catalog addons installed. Install a catalog addon to see content.</string>
     <string name="auth_notice_nuvio_logged_out">You have been signed out of Nuvio. Please sign in again.</string>

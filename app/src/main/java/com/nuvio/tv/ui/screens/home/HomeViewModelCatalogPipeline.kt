@@ -449,6 +449,7 @@ internal fun HomeViewModel.loadCatalogPipeline(
                         } else {
                             pendingRefreshMerges.remove(key)
                             replaceCatalogRow(key, result.data)
+                            clearNewItems(result.data.stableKey())
                             // Trigger MDBList batch for newly loaded catalog data.
                             onCatalogRowItemsChanged(key)
                         }
@@ -1110,6 +1111,7 @@ internal fun HomeViewModel.applyPendingRefreshMerges() {
         if (merge.generation != catalogLoadGeneration) return@forEach
         if (!mergeRefreshedCatalogRow(key, merge.fresh, merge.requestedByUser, merge.forceReplace)) {
             replaceCatalogRow(key, merge.fresh)
+            clearNewItems(merge.fresh.stableKey())
         }
         onCatalogRowItemsChanged(key)
     }
@@ -1247,6 +1249,7 @@ internal fun HomeViewModel.mergeRefreshedCatalogRow(
             )
         } else emptySet()
         val moved = change.moved - held
+        val headKeys = fresh.stableItemKeys().take(change.headCount)
         val head = fresh.items.take(change.headCount)
         val applied = head.indices.filter { identity(head[it]) !in held }
         if (applied.isEmpty()) return true
@@ -1263,6 +1266,7 @@ internal fun HomeViewModel.mergeRefreshedCatalogRow(
                 nextSkip = shiftedSkip
             )
         )
+        addNewItems(fresh.stableKey(), applied.filter { identity(head[it]) !in change.moved }.map { headKeys[it] })
         Log.d(
             HomeViewModel.TAG,
             "Home catalog refresh: +${change.addedCount} item(s), ${moved.size} moved to front catalogId=${fresh.catalogId}"
